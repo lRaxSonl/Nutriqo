@@ -4,6 +4,27 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 First, run the development server:
 
+Create .env.local
+```
+# --- SUPABASE ---
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# --- NEXTAUTH ---
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=
+
+# --- GOOGLE OAUTH ---
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# --- STRIPE ---
+STRIPE_SECRET_KEY=
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
+STRIPE_WEBHOOK_SECRET=
+```
+
 ```bash
 npm run dev
 # or
