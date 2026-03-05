@@ -43,8 +43,11 @@ export const DailyTrackerWidget = () => {
   // Группировка по приемам пищи
   const groupedMeals = useMemo(() => {
     return entries.reduce((acc, item) => {
-      acc[item.mealType].push(item);
-      return acc;
+        if (!acc[item.mealType]) {
+            acc[item.mealType] = [];
+        }
+        acc[item.mealType].push(item);
+        return acc;
     }, {} as GroupedMeals);
   }, [entries]);
 

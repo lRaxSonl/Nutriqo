@@ -8,6 +8,7 @@ import { Button } from '@/shared/ui/Button/Button';
 import { Select } from '@/shared/ui/Select/Select';
 // Импортируем типы сущности
 import { FoodEntry, MealType } from '@/entities/food/model/types';
+import { now } from 'next-auth/client/_utils';
 
 interface AddFoodFormProps {
   onAdd: (entry: Omit<FoodEntry, 'id' | 'timestamp'>) => void;
@@ -35,12 +36,13 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
 
     // Вызываем функцию передачи данных наверх (в Widget)
     onAdd({
-      name: name.trim(),
-      calories: parseInt(calories),
-      protein: 0, // Пока заглушки, можно добавить поля позже
-      fats: 0,
-      carbs: 0,
-      mealType,
+        name: name.trim(),
+        calories: parseInt(calories),
+        protein: 0, // Пока заглушки, можно добавить поля позже
+        fats: 0,
+        carbs: 0,
+        mealType,
+        date: new Date(now()), // Текущая дата и время
     });
 
     // Очищаем форму
@@ -54,7 +56,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
         
         {/* Поле названия (занимает 5 колонок на больших экранах) */}
-        <div className="md:col-span-5">
+        <div className="md:col-span-5 text-black">
           <Input
             placeholder="Название (например, Яблоко)"
             value={name}
@@ -64,7 +66,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Поле калорий (занимает 3 колонки) */}
-        <div className="md:col-span-3">
+        <div className="md:col-span-3 text-black">
           <Input
             type="number"
             placeholder="Ккал"
@@ -76,7 +78,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Выбор типа еды (занимает 2 колонки) */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 text-black">
           <Select
             options={mealOptions}
             value={mealType}
@@ -85,7 +87,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Кнопка (занимает 2 колонки) */}
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 text-black">
           <Button 
             type="submit" 
             className="w-full" 
