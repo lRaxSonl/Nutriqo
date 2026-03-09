@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: '2023-10-16' });
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function createCheckoutSession(userId: string, email: string) {
   const session = await stripe.checkout.sessions.create({
@@ -10,7 +10,10 @@ export async function createCheckoutSession(userId: string, email: string) {
         price_data: {
           currency: 'usd',
           product_data: { name: 'NutriQo Premium' },
-          unit_amount: 999, // $9.99
+          unit_amount: 999,
+          recurring: {
+            interval: 'month',
+          },
         },
         quantity: 1,
       },
