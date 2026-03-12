@@ -6,10 +6,8 @@ First, run the development server:
 
 Create .env.local
 ```
-# --- SUPABASE ---
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+# --- POCKETBASE ---
+POCKETBASE_URL=http://127.0.0.1:8090   # or your hosted PocketBase URL
 
 # --- NEXTAUTH ---
 NEXTAUTH_URL=http://localhost:3000
