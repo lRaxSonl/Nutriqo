@@ -5,23 +5,44 @@ import { signIn } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card/Card';
 import { Input } from '@/shared/ui/Input/Input';
 import { Button } from '@/shared/ui/Button/Button';
+import { authApi } from '@/shared/api/auth';
+import { useHttp } from '@/shared/api/hooks/useHttp';
+import { HttpClientError } from '@/shared/api/http-client/types';
 
 export const LoginForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const { handleError, handleSuccess } = useHttp();
 
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const result = await signIn('credentials', {
-      email,
-      password,
-      redirect: false, // Не перезагружать страницу сразу
-    });
-    if (result?.error) alert('Ошибка входа: ' + result.error);
-    else window.location.reload(); // Перезагрузка для обновления сессии
-    setIsLoading(false);
+
+    try {
+      if (mode === 'register') {
+        await authApi.register({ email, password });
+        handleSuccess('Регистрация успешна. Выполняю вход...');
+      }
+
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        handleError(new HttpClientError('Неверный email или пароль', 401));
+      } else {
+        handleSuccess(mode === 'register' ? undefined : 'Вход выполнен');
+        window.location.reload();
+      }
+    } catch (error) {
+      handleError(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = () => {
@@ -29,15 +50,41 @@ export const LoginForm = () => {
   };
 
   return (
-    <Card className="max-w-md mx-auto mt-10">
-      <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Вход в Nutriqo</h2>
+    <Card className="max-w-md mx-auto mt-10 bg-background-secondary border border-border">
+      <h2 className="text-2xl font-bold mb-6 text-center text-foreground">Вход в Nutriqo</h2>
       
       <div className="space-y-4">
+        <div className="flex rounded-md border border-border bg-background p-1">
+          <button
+            type="button"
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'login'
+                ? 'bg-primary text-white'
+                : 'text-foreground-secondary hover:text-foreground'
+            }`}
+            onClick={() => setMode('login')}
+          >
+            Вход
+          </button>
+          <button
+            type="button"
+            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              mode === 'register'
+                ? 'bg-primary text-white'
+                : 'text-foreground-secondary hover:text-foreground'
+            }`}
+            onClick={() => setMode('register')}
+          >
+            Регистрация
+          </button>
+        </div>
+
         {/* Кнопка Google */}
         <Button 
           variant="secondary" 
           className="w-full flex justify-center items-center gap-2"
           onClick={handleGoogleLogin}
+          disabled={mode === 'register'}
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -49,8 +96,8 @@ export const LoginForm = () => {
         </Button>
 
         <div className="relative my-4">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300"></div></div>
-          <div className="relative flex justify-center text-sm"><span className="px-2 bg-white text-gray-500">Или email</span></div>
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border"></div></div>
+          <div className="relative flex justify-center text-sm"><span className="px-2 bg-background-secondary text-foreground-secondary">Или email</span></div>
         </div>
 
         {/* Форма Email/Pass */}
@@ -70,7 +117,7 @@ export const LoginForm = () => {
             required 
           />
           <Button type="submit" className="w-full" isLoading={isLoading}>
-            Войти
+            {mode === 'register' ? 'Зарегистрироваться' : 'Войти'}
           </Button>
         </form>
       </div>

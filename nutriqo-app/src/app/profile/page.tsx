@@ -11,8 +11,8 @@ export default async function ProfilePage() {
     <div className="max-w-2xl mx-auto py-10 px-4">
       <h1 className="text-3xl font-bold mb-6">Профиль</h1>
       <Card title="Ваша подписка">
-        <p className="mb-4">Статус: <span className="font-bold text-yellow-600">Free</span></p>
-        <p className="text-gray-600 mb-6">Получите доступ к расширенной аналитике и экспорту данных.</p>
+        <p className="mb-4">Статус: <span className="font-bold text-warning">Free</span></p>
+        <p className="text-foreground-secondary mb-6">Получите доступ к расширенной аналитике и экспорту данных.</p>
         <SubscribeButton />
       </Card>
     </div>

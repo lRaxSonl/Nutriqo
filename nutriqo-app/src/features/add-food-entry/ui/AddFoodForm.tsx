@@ -56,7 +56,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
         
         {/* Поле названия (занимает 5 колонок на больших экранах) */}
-        <div className="md:col-span-5 text-black">
+        <div className="md:col-span-5">
           <Input
             placeholder="Название (например, Яблоко)"
             value={name}
@@ -66,7 +66,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Поле калорий (занимает 3 колонки) */}
-        <div className="md:col-span-3 text-black">
+        <div className="md:col-span-3">
           <Input
             type="number"
             placeholder="Ккал"
@@ -78,7 +78,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Выбор типа еды (занимает 2 колонки) */}
-        <div className="md:col-span-2 text-black">
+        <div className="md:col-span-2">
           <Select
             options={mealOptions}
             value={mealType}
@@ -87,7 +87,7 @@ export const AddFoodForm = ({ onAdd }: AddFoodFormProps) => {
         </div>
 
         {/* Кнопка (занимает 2 колонки) */}
-        <div className="md:col-span-2 text-black">
+        <div className="md:col-span-2">
           <Button 
             type="submit" 
             className="w-full" 

@@ -17,11 +17,11 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
 
   if (!isEditing && initialGoal) {
     return (
-      <Card className="mb-6 bg-blue-50 border-blue-100">
+      <Card className="mb-6 bg-background border-border">
         <div className="flex justify-between items-center">
           <div>
-            <span className="text-sm text-blue-600 font-medium">Ваша цель на сегодня</span>
-            <div className="text-2xl font-bold text-blue-800">{initialGoal.calories} ккал</div>
+            <span className="text-sm text-primary font-medium">Ваша цель на сегодня</span>
+            <div className="text-2xl font-bold text-foreground">{initialGoal.calories} ккал</div>
           </div>
           <Button variant="secondary" onClick={() => setIsEditing(true)}>
             Изменить
@@ -45,7 +45,7 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
 
   return (
     <Card title="Установите цель калорий" className="mb-6">
-      <form onSubmit={handleSubmit} className="flex gap-4 items-end text-black">
+      <form onSubmit={handleSubmit} className="flex gap-4 items-end">
         <Input
           type="number"
           label="Ккал в день"

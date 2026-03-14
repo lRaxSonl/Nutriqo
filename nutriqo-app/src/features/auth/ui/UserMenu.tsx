@@ -15,7 +15,7 @@ export const UserMenu = () => {
     <div className="flex items-center gap-4">
       <div className="text-right hidden sm:block">
         <p className="text-sm font-bold">{session.user?.name}</p>
-        <p className="text-xs text-gray-500">{session.user?.email}</p>
+        <p className="text-xs text-foreground-secondary">{session.user?.email}</p>
       </div>
       {session.user?.image && (
         <img src={session.user.image} alt="Avatar" className="w-10 h-10 rounded-full border" />

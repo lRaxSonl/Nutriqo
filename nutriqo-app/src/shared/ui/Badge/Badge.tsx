@@ -10,9 +10,9 @@ interface BadgeProps {
 
 export const Badge = ({ variant = 'default', children, className = '' }: BadgeProps) => {
   const styles = {
-    success: 'bg-green-100 text-green-800',
-    default: 'bg-gray-100 text-gray-800',
-    warning: 'bg-yellow-100 text-yellow-800',
+    success: 'bg-success/20 text-success',
+    default: 'bg-background text-foreground border border-border',
+    warning: 'bg-warning/20 text-warning',
   };
 
   return (
