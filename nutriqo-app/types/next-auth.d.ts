@@ -1,15 +1,18 @@
 import NextAuth from "next-auth";
-import { User } from "@/types/user"; // путь к твоему интерфейсу
+import type { User } from "@/entities/user/model/types";
 
 declare module "next-auth" {
   interface Session {
-    user: User;
+    user: User & { id: string };
+    pbToken?: string; // PocketBase authentication token
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     sub?: string;
+    id?: string;
+    pbToken?: string;
     subscriptionStatus?: 'active' | 'inactive';
   }
 }

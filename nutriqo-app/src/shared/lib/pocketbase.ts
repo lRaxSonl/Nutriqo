@@ -16,3 +16,17 @@ export const createPocketBaseClient = () => {
 	client.autoCancellation(false);
 	return client;
 };
+
+/**
+ * Создать аутентифицированный PocketBase клиент с токеном пользователя
+ * @param token - JWT токен от PocketBase (получается при authWithPassword)
+ */
+export const createAuthenticatedPocketBaseClient = (token: string) => {
+	const client = new PocketBase(getPocketBaseUrl());
+	client.autoCancellation(false);
+	// Установить авторизацию через токен
+	client.authStore.save(token);
+	return client;
+};
+
+export const pb = createPocketBaseClient()

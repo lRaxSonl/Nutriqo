@@ -14,18 +14,22 @@ type GroupedMeals = Record<MealType, FoodEntry[]>;
 export const DailyTrackerWidget = () => {
   // 1. Состояние цели
   const [goal, setGoal] = useState<DailyGoal | null>(null);
+  const [goalId, setGoalId] = useState<string | null>(null);
   
   // 2. Состояние списка записей
   const [entries, setEntries] = useState<FoodEntry[]>([]);
 
+  // Обработчик сохранения цели
+  const handleSaveGoal = (savedGoal: DailyGoal, id?: string) => {
+    setGoal(savedGoal);
+    if (id) {
+      setGoalId(id);
+    }
+  };
+
   // Обработчик добавления записи (приходит из формы)
-  const handleAddEntry = (data: Omit<FoodEntry, 'id' | 'date'>) => {
-    const newEntry: FoodEntry = {
-      ...data,
-      id: crypto.randomUUID(),
-      date: new Date(),
-    };
-    setEntries((prev) => [newEntry, ...prev]);
+  const handleAddEntry = (data: FoodEntry) => {
+    setEntries((prev) => [data, ...prev]);
   };
 
   // Обработчик удаления записи
@@ -35,7 +39,7 @@ export const DailyTrackerWidget = () => {
 
   // Подсчет итогов
   const totalCalories = useMemo(() => 
-    entries.reduce((sum, item) => sum + item.calories, 0), 
+    entries.reduce((sum, item) => sum + (Number(item.calories) || 0), 0), 
   [entries]);
 
   const progress = goal ? Math.min((totalCalories / goal.calories) * 100, 100) : 0;
@@ -60,13 +64,13 @@ export const DailyTrackerWidget = () => {
 
   // Если цель еще не установлена, показываем только настройку цели
   if (!goal) {
-    return <GoalSetter onSave={setGoal} />;
+    return <GoalSetter onSave={handleSaveGoal} />;
   }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Блок цели (теперь в режиме просмотра) */}
-      <GoalSetter initialGoal={goal} onSave={setGoal} />
+      <GoalSetter initialGoal={goal} onSave={handleSaveGoal} />
 
       {/* Прогресс бар */}
       <Card className="bg-gradient-to-r from-background to-background-secondary border-border">
@@ -97,7 +101,12 @@ export const DailyTrackerWidget = () => {
       </Card>
 
       {/* Форма добавления */}
-      <AddFoodForm onAdd={handleAddEntry} />
+      {goalId && (
+        <AddFoodForm 
+          goalId={goalId} 
+          onAdd={handleAddEntry} 
+        />
+      )}
 
       {/* Список по категориям */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -105,7 +114,7 @@ export const DailyTrackerWidget = () => {
           const meals = groupedMeals[type];
           if (meals.length === 0) return null;
 
-          const mealCalories = meals.reduce((s, m) => s + m.calories, 0);
+          const mealCalories = meals.reduce((s, m) => s + (Number(m.calories) || 0), 0);
 
           return (
             <Card key={type} title={`${mealLabels[type]} (${mealCalories} ккал)`} className="min-h-[160px]">

@@ -1,0 +1,214 @@
+/**
+ * Add Food Entry API
+ * 
+ * Фичи для добавления записи о съеденной пище согласно FSD
+ * Инкапсулирует бизнес логику и взаимодействие с моделями
+ */
+
+import { EatenFood, type EatenFoodType } from '@/shared/lib/models/EatenFood';
+import { Goal, type GoalType } from '@/shared/lib/models/Goal';
+import { MealType } from '@/shared/types/meals';
+import type BaseModel from '@/shared/lib/models/Base';
+
+// Дефолтные модели для функций, не требующих аутентификации
+const eatenFoodModel = new EatenFood();
+const goalModel = new Goal();
+
+interface AddFoodEntryInput {
+  name: string;
+  calories: number;
+  protein?: number;
+  fats?: number;
+  carbs?: number;
+  meal_type: MealType;
+  goal_id: string;
+  date?: string; // ISO 8601, если не указана - используется текущая дата
+}
+
+interface AddFoodEntryOutput extends EatenFoodType {}
+
+/**
+ * Добавить запись о съеденной пище в базу данных
+ * 
+ * @param input - Данные пищи
+ * @param authenticatedEatenFoodModel - Опциональный аутентифицированный экземпляр EatenFood модели
+ * @param authenticatedGoalModel - Опциональный аутентифицированный экземпляр Goal модели
+ * @throws Error если goal_id не существует или валидация не пройдена
+ */
+export async function addFoodEntry(
+  input: AddFoodEntryInput,
+  authenticatedEatenFoodModel?: BaseModel<EatenFoodType>,
+  authenticatedGoalModel?: BaseModel<GoalType>
+): Promise<AddFoodEntryOutput> {
+  try {
+    // Валидация входных данных
+    validateFoodEntryInput(input);
+
+    const eatenFoodModel = authenticatedEatenFoodModel || new EatenFood();
+    const goalModel = authenticatedGoalModel || new Goal();
+
+    // Проверка существования цели
+    const goal = await goalModel.findById(input.goal_id);
+    if (!goal) {
+      throw new Error('Goal not found');
+    }
+
+    // Подготовка данных для сохранения
+    const foodEntryData: Omit<EatenFoodType, 'id' | 'created_at' | 'updated_at'> = {
+      name: input.name.trim(),
+      calories: input.calories,
+      protein: input.protein ?? 0,
+      fats: input.fats ?? 0,
+      carbs: input.carbs ?? 0,
+      meal_type: input.meal_type,
+      goal_id: input.goal_id,
+      date: input.date ?? new Date().toISOString().split('T')[0],
+    };
+
+    // Сохранение в базу данных
+    const savedEntry = await eatenFoodModel.create(foodEntryData);
+
+    return savedEntry;
+  } catch (error) {
+    // Логирование и пробрасывание ошибки
+    console.error('Error adding food entry:', error);
+    
+    if (error instanceof Error) {
+      throw new Error(`Failed to add food entry: ${error.message}`);
+    }
+    
+    throw new Error('Failed to add food entry: Unknown error');
+  }
+}
+
+/**
+ * Получить все записи о пище для определенной цели
+ */
+export async function getFoodEntriesByGoal(goalId: string): Promise<EatenFoodType[]> {
+  try {
+    return await eatenFoodModel.getEatenFoodByGoal(goalId);
+  } catch (error) {
+    console.error('Error fetching food entries:', error);
+    throw new Error('Failed to fetch food entries');
+  }
+}
+
+/**
+ * Получить записи о пище на определенную дату
+ */
+export async function getFoodEntriesByDate(date: string): Promise<EatenFoodType[]> {
+  try {
+    return await eatenFoodModel.getByDate(date);
+  } catch (error) {
+    console.error('Error fetching food entries for date:', error);
+    throw new Error('Failed to fetch food entries for date');
+  }
+}
+
+/**
+ * Удалить запись о пище
+ */
+export async function deleteFoodEntry(id: string): Promise<void> {
+  try {
+    await eatenFoodModel.delete(id);
+  } catch (error) {
+    console.error('Error deleting food entry:', error);
+    throw new Error('Failed to delete food entry');
+  }
+}
+
+/**
+ * Обновить запись о пище
+ */
+export async function updateFoodEntry(
+  id: string,
+  input: Partial<Omit<AddFoodEntryInput, 'goal_id' | 'date'>>
+): Promise<EatenFoodType> {
+  try {
+    validateFoodEntryInput(input, true);
+
+    const updateData: Partial<Omit<EatenFoodType, 'id' | 'created_at'>> = {};
+
+    if (input.name !== undefined) updateData.name = input.name.trim();
+    if (input.calories !== undefined) updateData.calories = input.calories;
+    if (input.protein !== undefined) updateData.protein = input.protein;
+    if (input.fats !== undefined) updateData.fats = input.fats;
+    if (input.carbs !== undefined) updateData.carbs = input.carbs;
+    if (input.meal_type !== undefined) updateData.meal_type = input.meal_type;
+
+    return await eatenFoodModel.update(id, updateData);
+  } catch (error) {
+    console.error('Error updating food entry:', error);
+    throw new Error('Failed to update food entry');
+  }
+}
+
+/**
+ * Валидация входящих данных
+ * @param partial - если true, не требует все поля (для частичного обновления)
+ */
+function validateFoodEntryInput(
+  input: Partial<AddFoodEntryInput>,
+  partial: boolean = false
+): void {
+  if (!partial) {
+    const fullInput = input as AddFoodEntryInput;
+
+    if (!fullInput.name || fullInput.name.trim().length === 0) {
+      throw new Error('Food name is required');
+    }
+
+    if (fullInput.name.trim().length > 100) {
+      throw new Error('Food name must be less than 100 characters');
+    }
+
+    if (
+      typeof fullInput.calories !== 'number' ||
+      fullInput.calories < 0 ||
+      fullInput.calories > 10000
+    ) {
+      throw new Error('Calories must be a number between 0 and 10000');
+    }
+
+    if (!fullInput.meal_type) {
+      throw new Error('Meal type is required');
+    }
+
+    if (!fullInput.goal_id) {
+      throw new Error('Goal ID is required');
+    }
+  }
+
+  // Частичная валидация для опциональных полей
+  if (input.name !== undefined && input.name.trim().length > 100) {
+    throw new Error('Food name must be less than 100 characters');
+  }
+
+  if (
+    input.calories !== undefined &&
+    (typeof input.calories !== 'number' || input.calories < 0 || input.calories > 10000)
+  ) {
+    throw new Error('Calories must be a number between 0 and 10000');
+  }
+
+  if (
+    input.protein !== undefined &&
+    (typeof input.protein !== 'number' || input.protein < 0)
+  ) {
+    throw new Error('Protein must be a non-negative number');
+  }
+
+  if (
+    input.fats !== undefined &&
+    (typeof input.fats !== 'number' || input.fats < 0)
+  ) {
+    throw new Error('Fats must be a non-negative number');
+  }
+
+  if (
+    input.carbs !== undefined &&
+    (typeof input.carbs !== 'number' || input.carbs < 0)
+  ) {
+    throw new Error('Carbs must be a non-negative number');
+  }
+}
