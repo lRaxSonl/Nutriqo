@@ -28,9 +28,10 @@ add-food-entry/
 - `carbs?: number` - Углеводы (опционально)
 - `meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'` - Тип приема пищи
 - `goal_id: string` - ID цели, связанной с записью
-- `date?: string` - ISO 8601 дата (по умолчанию текущая дата)
 
-**Возвращает:** Созданная запись с автоматически сгенерированными `id` и `created_at`
+**Возвращает:** Созданная запись с автоматически сгенерированными `id`, `created_at` и `updated_at`
+
+**Поведение:** Timestamp автоматически устанавливается на текущее время (created_at) при создании.
 
 **Выброс ошибок:**
 - ValidationError - если данные не валидны
@@ -95,13 +96,16 @@ const entry = await addFoodEntry({
 Collection: eatenfood
 - id (uuid, auto-generated)
 - name (string, required)
-- meal_type (select, required)
+- meal_type (select, required) - 'breakfast' | 'lunch' | 'dinner' | 'snack'
 - calories (number, required)
-- protein (number)
-- fats (number)
-- carbs (number)
-- goal_id (relation to goals, required)
-- date (date, required)
-- created_at (datetime, auto)
-- updated_at (datetime, auto)
+- protein (number, optional)
+- fats (number, optional)
+- carbs (number, optional)
+- goal_id (relation to goals, required) - FK to goals.id
+- created_at (datetime, auto-generated) - When food entry was created
+- updated_at (datetime, auto-generated) - When food entry was last updated
 ```
+
+**Design Notes:**
+- Use `created_at` timestamp to determine when food was eaten
+- To query entries for a specific day, use `getByDate(date)` which filters by created_at range

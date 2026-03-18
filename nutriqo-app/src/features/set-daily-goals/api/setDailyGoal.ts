@@ -16,7 +16,7 @@ interface SetDailyGoalInput {
   protein_goal?: number;
   fats_goal?: number;
   carbs_goal?: number;
-  date?: string; // ISO 8601, если не указана - используется текущая дата
+  // Note: 'date' field not stored in PocketBase. Goals are stored once per user and updated.
 }
 
 interface SetDailyGoalOutput extends GoalType {}
@@ -38,23 +38,19 @@ export async function setDailyGoal(
 
     const goalModel = authenticatedGoalModel || new Goal();
 
-    // Примечание: проверка пользователя пропущена, т.к. NextAuth уже подтвердил его существование
-    // перед тем как передать session.user.id в API
+    // Note: User validation skipped - NextAuth already authenticated the user
 
-    const targetDate = input.date ?? new Date().toISOString().split('T')[0];
-
-    // Подготовка данных для сохранения
+    // Prepare data for saving (no date field - goals are per-user singletons)
     const goalData: Omit<GoalType, 'id' | 'created_at' | 'updated_at'> = {
       user_id: input.user_id,
       calories_goal: input.calories_goal,
       protein_goal: input.protein_goal ?? 0,
       fats_goal: input.fats_goal ?? 0,
       carbs_goal: input.carbs_goal ?? 0,
-      date: targetDate,
     };
 
-    // Если цель на дату уже есть, обновляем ее вместо создания новой
-    const existingGoal = await goalModel.getGoalByDate(input.user_id, targetDate);
+    // Upsert: Update existing goal if present, otherwise create new
+    const existingGoal = await goalModel.getGoalByDate(input.user_id);
     const savedGoal = existingGoal
       ? await goalModel.update(existingGoal.id, {
           calories_goal: goalData.calories_goal,
@@ -77,12 +73,11 @@ export async function setDailyGoal(
 }
 
 /**
- * Получить цель пользователя на определенную дату
+ * Получить текущую цель пользователя
  */
-export async function getDailyGoal(userId: string, date?: string): Promise<GoalType | null> {
+export async function getDailyGoal(userId: string): Promise<GoalType | null> {
   try {
-    const targetDate = date ?? new Date().toISOString().split('T')[0];
-    return await goalModel.getGoalByDate(userId, targetDate);
+    return await goalModel.getGoalByDate(userId);
   } catch (error) {
     console.error('Error fetching daily goal:', error);
     throw new Error('Failed to fetch daily goal');

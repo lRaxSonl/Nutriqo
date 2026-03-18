@@ -24,8 +24,25 @@ export const createPocketBaseClient = () => {
 export const createAuthenticatedPocketBaseClient = (token: string) => {
 	const client = new PocketBase(getPocketBaseUrl());
 	client.autoCancellation(false);
-	// Установить авторизацию через токен
-	client.authStore.save(token);
+	
+	// Decode the JWT token to extract user info
+	// PocketBase JWT format: { id, email, role, ...other_fields }
+	let userId = '';
+	try {
+		// JWT format: header.payload.signature
+		const parts = token.split('.');
+		if (parts.length === 3) {
+			const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+			userId = payload.id || payload.sub || '';
+		}
+	} catch (e) {
+		console.warn('Failed to decode JWT token');
+	}
+	
+	// Save the token with user model containing at least the ID
+	// This is crucial for collection rules that rely on @request.auth.id
+	client.authStore.save(token, { id: userId } as any);
+	
 	return client;
 };
 

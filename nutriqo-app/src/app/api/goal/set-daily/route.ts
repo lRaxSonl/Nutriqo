@@ -28,14 +28,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Получаем данные из request body
+    // Get request body
     const body = await request.json();
-    const { calories_goal, protein_goal, fats_goal, carbs_goal, date } = body;
+    const { calories_goal, protein_goal, fats_goal, carbs_goal } = body;
 
-    // Создаем аутентифицированный экземпляр Goal модели
+    // Create authenticated Goal model instance with user's PocketBase token
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
 
-    // Вызываем API функцию для сохранения в БД с аутентифицированной моделью
+    // Call API function to save goal (upsert if goal already exists for user)
     const goal = await setDailyGoal(
       {
         user_id: session.user.id,
@@ -43,7 +43,6 @@ export async function POST(request: NextRequest) {
         protein_goal,
         fats_goal,
         carbs_goal,
-        date,
       },
       authenticatedGoalModel
     );

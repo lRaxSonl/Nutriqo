@@ -89,7 +89,7 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
         fats: Number(entry.fats) || 0,
         carbs: Number(entry.carbs) || 0,
         mealType: entry.meal_type,
-        date: entry.date ? new Date(entry.date) : new Date(),
+        date: entry.created_at ? new Date(entry.created_at) : new Date(),
       };
 
       // Вызываем колбэк на успешное добавление

@@ -29,25 +29,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Получаем данные из request body
+    // Get request body data
     const body = await request.json();
-    const { name, meal_type, calories, protein, fats, carbs, goal_id, date } = body;
+    const { name, meal_type, calories, protein, fats, carbs, goal_id } = body;
 
-    // Создаем аутентифицированные экземпляры моделей
+    // Validate that essential fields are present
+    if (!name || !meal_type || calories === undefined || !goal_id) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, meal_type, calories, goal_id' },
+        { status: 400 }
+      );
+    }
+
+    // Create authenticated model instances with user's PocketBase token
     const authenticatedEatenFoodModel = new EatenFood().withAuthToken(pbToken);
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
 
-    // Вызываем API функцию для сохранения в БД с аутентифицированными моделями
+    // Call API function to save food entry
     const entry = await addFoodEntry(
       {
-        name,
-        meal_type,
-        calories,
-        protein,
-        fats,
-        carbs,
-        goal_id,
-        date,
+        name: String(name),
+        meal_type: String(meal_type) as any,
+        calories: Number(calories),
+        protein: protein ? Number(protein) : undefined,
+        fats: fats ? Number(fats) : undefined,
+        carbs: carbs ? Number(carbs) : undefined,
+        goal_id: String(goal_id),
       },
       authenticatedEatenFoodModel,
       authenticatedGoalModel

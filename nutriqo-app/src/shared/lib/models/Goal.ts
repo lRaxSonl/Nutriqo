@@ -7,7 +7,8 @@ export interface GoalType extends BaseEntity {
   protein_goal?: number;
   fats_goal?: number;
   carbs_goal?: number;
-  date: string; // ISO 8601 date
+  // NOTE: 'date' field is not used. Daily goals are stored once and updated via created_at/updated_at.
+  // For querying today's goal, use getGoalByDate() which returns the most recent goal for the user.
 }
 
 class Goal extends BaseModel<GoalType> {
@@ -30,17 +31,28 @@ class Goal extends BaseModel<GoalType> {
   }
 
   /**
-   * Получить цель пользователя на определенную дату
+   * Получить последнюю установленную цель пользователя
+   * 
+   * Design Note: PocketBase goals are stored without explicit 'date' field.
+   * Each user has at most one active goal at a time, stored with created_at/updated_at timestamps.
+   * This method returns the most recent goal for proper daily tracking.
+   * 
+   * @param userId - User ID from PocketBase auth
+   * @param _date - Unused parameter (kept for API compatibility with previous version)
+   * @returns Most recent goal or null if user has no goals
    */
-  async getGoalByDate(userId: string, date: string): Promise<GoalType | null> {
+  async getGoalByDate(userId: string, _date?: string): Promise<GoalType | null> {
     try {
-      const goals = await this.client.collection(this.collection).getFullList({
-        filter: `user_id="${userId}" && date="${date}"`
+      const userGoals = await this.client.collection(this.collection).getFullList({
+        filter: `user_id = "${userId}"`,
+        sort: '-updated_at', // Most recently updated first
+        limit: 1
       });
-      return (goals.length > 0 ? goals[0] : null) as unknown as GoalType | null;
+      
+      return userGoals.length > 0 ? (userGoals[0] as unknown as GoalType) : null;
     } catch (error) {
-      console.error(`Error fetching goal for user ${userId} on date ${date}:`, error);
-      throw new Error(`Failed to fetch goal for date`);
+      console.error(`Error fetching goal for user ${userId}:`, error);
+      throw error;
     }
   }
 

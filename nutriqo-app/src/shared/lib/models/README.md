@@ -44,26 +44,31 @@ interface UserType extends BaseEntity {
 
 ```typescript
 interface GoalType extends BaseEntity {
-  user_id: string;          // Foreign key
-  calories_goal: number;    // Обязательное поле
+  user_id: string;          // PocketBase auth user ID
+  calories_goal: number;    // Required
   protein_goal?: number;
   fats_goal?: number;
   carbs_goal?: number;
-  date: string;             // ISO 8601 дата
+  // Note: 'date' field not used. Goals are singletons per user, tracked via created_at/updated_at
 }
 ```
 
 **Методы:**
 - `getGoalsByUser(userId: string): Promise<GoalType[]>` - Получить все цели пользователя
-- `getGoalByDate(userId: string, date: string): Promise<GoalType | null>` - Получить цель на дату
+- `getGoalByDate(userId: string, date?: string): Promise<GoalType | null>` - Получить последнюю цель пользователя (сортировка по updated_at DESC)
 - `getEatenFood(goalId: string)` - Получить все продукты для цели
 - Наследует CRUD методы из BaseModel
+
+**Дизайн-заметки:**
+- Каждый пользователь может иметь одну активную цель
+- Цели обновляются на месте, а не создаются заново для разных дат
+- Используйте `created_at`/`updated_at` для отслеживания истории изменений
 
 **База данных:**
 - Коллекция: `goals`
 - Первичный ключ: `id` (UUID)
-- Внешний ключ: `user_id` -> `users.id`
-- Индексы: `user_id`, `date`
+- Внешний ключ: `user_id` -> PocketBase auth users
+- Уникальное поле: (user_id) - один goal на пользователя
 
 ### 3. EatenFood Model (`EatenFood.ts`)
 
@@ -76,20 +81,23 @@ interface EatenFoodType extends BaseEntity {
   fats?: number;
   carbs?: number;
   goal_id: string;          // Foreign key
-  date: string;             // ISO 8601 дата когда было съедено
+  // Note: 'date' field not used. Use created_at for temporal queries
 }
 ```
 
 **Методы:**
 - `getEatenFoodByGoal(goalId: string): Promise<EatenFoodType[]>` - Получить продукты для цели
-- `getByDate(date: string): Promise<EatenFoodType[]>` - Получить продукты по дате
+- `getByDate(date: string): Promise<EatenFoodType[]>` - Получить продукты за день (фильтр по created_at)
 - Наследует CRUD методы из BaseModel
+
+**Дизайн-заметки:**
+- Временная информация хранится в автоматических полях `created_at`/`updated_at`
+- `getByDate()` фильтрует записи по диапазону дат created_at
 
 **База данных:**
 - Коллекция: `eatenfood`
 - Первичный ключ: `id` (UUID)
 - Внешний ключ: `goal_id` -> `goals.id`
-- Индексы: `goal_id`, `date`
 
 ## Base Model Class (`Base.ts`)
 

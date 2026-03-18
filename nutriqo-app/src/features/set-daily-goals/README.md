@@ -18,7 +18,7 @@ set-daily-goals/
 
 ### `setDailyGoal(input: SetDailyGoalInput): Promise<SetDailyGoalOutput>`
 
-Установить ежедневную цель для пользователя.
+Установить (или обновить если уже существует) ежедневную цель для пользователя.
 
 **Параметры:**
 - `user_id: string` - ID пользователя
@@ -26,18 +26,18 @@ set-daily-goals/
 - `protein_goal?: number` - Цель по белкам (опционально)
 - `fats_goal?: number` - Цель по жирам (опционально)
 - `carbs_goal?: number` - Цель по углеводам (опционально)
-- `date?: string` - ISO 8601 дата (по умолчанию текущая дата)
 
-**Возвращает:** Созданная цель с автоматически сгенерированными `id` и `created_at`
+**Возвращает:** Созданная или обновленная цель с `id`, `created_at` и `updated_at`
+
+**Поведение:** Если цель для пользователя уже существует, она будет обновлена вместо создания новой (upsert).
 
 **Выброс ошибок:**
 - ValidationError - если данные не валидны
-- NotFoundError - если user_id не существует
 - DatabaseError - если ошибка при сохранении в БД
 
-### `getDailyGoal(userId: string, date?: string): Promise<GoalType | null>`
+### `getDailyGoal(userId: string): Promise<GoalType | null>`
 
-Получить цель пользователя на определенную дату.
+Получить последнюю установленную цель пользователя (основана на updated_at).
 
 ### `getUserGoals(userId: string): Promise<GoalType[]>`
 
@@ -107,12 +107,17 @@ const allGoals = await getUserGoals('user-123');
 ```
 Collection: goals
 - id (uuid, auto-generated)
-- user_id (relation to users, required)
+- user_id (relation to users, required) - PocketBase auth user ID
 - calories_goal (number, required)
-- protein_goal (number)
-- fats_goal (number)
-- carbs_goal (number)
-- date (date, required)
-- created_at (datetime, auto)
-- updated_at (datetime, auto)
+- protein_goal (number, optional)
+- fats_goal (number, optional)
+- carbs_goal (number, optional)
+- created_at (datetime, auto-generated)
+- updated_at (datetime, auto-generated)
 ```
+
+**Design Notes:**
+- Each user can have ONE goal at a time (singleton pattern per user)
+- To get "today's goal", fetch the user's most recent goal (sorted by updated_at DESC)
+- Goals are updated in place rather than creating new records for different dates
+- No explicit 'date_set' field - use timestamps (created_at, updated_at) to track when goal was set

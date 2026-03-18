@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { Card } from '@/shared/ui/Card/Card';
 import { Badge } from '@/shared/ui/Badge/Badge';
 import { Button } from '@/shared/ui/Button/Button';
@@ -12,12 +13,82 @@ import { DailyGoal, FoodEntry, MealType } from '@/entities/food/model/types';
 type GroupedMeals = Record<MealType, FoodEntry[]>;
 
 export const DailyTrackerWidget = () => {
-  // 1. Состояние цели
+  const { data: session } = useSession();
+  
+  // Состояние цели
   const [goal, setGoal] = useState<DailyGoal | null>(null);
   const [goalId, setGoalId] = useState<string | null>(null);
+  const [isLoadingGoal, setIsLoadingGoal] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   
-  // 2. Состояние списка записей
+  // Состояние списка записей
   const [entries, setEntries] = useState<FoodEntry[]>([]);
+
+  // Загрузка цели за сегодня при входе пользователя
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setIsLoadingGoal(false);
+      return;
+    }
+
+    const loadDailyGoal = async () => {
+      setLoadingError(null);
+      try {
+        const response = await fetch('/api/goal/get-daily');
+        
+        if (response.ok) {
+          const goalData = await response.json();
+          setGoal({
+            calories: goalData.calories_goal,
+            protein: goalData.protein_goal || 0,
+            fats: goalData.fats_goal || 0,
+            carbs: goalData.carbs_goal || 0,
+          });
+          setGoalId(goalData.id);
+          
+          // Загружаем съеденные продукты для этой цели
+          try {
+            const entriesResponse = await fetch('/api/food/get-entries');
+            if (entriesResponse.ok) {
+              const entriesData = await entriesResponse.json();
+              const formattedEntries = entriesData.map((entry: any) => ({
+                id: entry.id,
+                name: entry.name,
+                calories: Number(entry.calories) || 0,
+                protein: Number(entry.protein) || 0,
+                fats: Number(entry.fats) || 0,
+                carbs: Number(entry.carbs) || 0,
+                mealType: entry.meal_type,
+                date: entry.created_at ? new Date(entry.created_at) : new Date(),
+              }));
+              setEntries(formattedEntries);
+            }
+          } catch (entriesError) {
+            console.error('Error loading entries:', entriesError);
+            // Don't set error state for entries - goal loaded successfully
+          }
+        } else if (response.status === 404) {
+          // Цели за сегодня нет - пользователь должен создать её
+          setGoal(null);
+          setGoalId(null);
+          setEntries([]);
+        } else {
+          const errorData = await response.json();
+          const errorMsg = errorData?.error || `Failed to load daily goal: ${response.status}`;
+          setLoadingError(errorMsg);
+          console.error('Failed to load daily goal:', errorMsg);
+        }
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        setLoadingError(errorMsg);
+        console.error('Error loading daily goal:', error);
+      } finally {
+        setIsLoadingGoal(false);
+      }
+    };
+
+    loadDailyGoal();
+  }, [session?.user?.id]);
 
   // Обработчик сохранения цели
   const handleSaveGoal = (savedGoal: DailyGoal, id?: string) => {
@@ -33,8 +104,26 @@ export const DailyTrackerWidget = () => {
   };
 
   // Обработчик удаления записи
-  const handleDeleteEntry = (id: string) => {
-    setEntries((prev) => prev.filter((item) => item.id !== id));
+  const handleDeleteEntry = async (id: string) => {
+    try {
+      const response = await fetch(`/api/food/delete-entry?entryId=${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Failed to delete entry:', errorData.error);
+        return;
+      }
+
+      // Удаляем из локального состояния только если успешно удалили с сервера
+      setEntries((prev) => prev.filter((item) => item.id !== id));
+    } catch (error) {
+      console.error('Error deleting food entry:', error);
+    }
   };
 
   // Подсчет итогов
@@ -63,6 +152,37 @@ export const DailyTrackerWidget = () => {
   };
 
   // Если цель еще не установлена, показываем только настройку цели
+  if (isLoadingGoal) {
+    return (
+      <Card className="mb-6 bg-background border-border">
+        <div className="flex items-center justify-center py-8">
+          <div className="animate-pulse text-foreground-secondary">Загружаем вашу цель на сегодня...</div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (loadingError) {
+    return (
+      <Card className="mb-6 bg-background border-border">
+        <div className="flex items-center gap-3 py-4 px-4">
+          <div className="text-error text-xl">⚠️</div>
+          <div className="flex-1">
+            <p className="text-error font-medium">Ошибка загрузки цели:</p>
+            <p className="text-foreground-secondary text-sm">{loadingError}</p>
+          </div>
+        </div>
+        <Button 
+          onClick={() => window.location.reload()}
+          className="w-full mt-3"
+          variant="secondary"
+        >
+          Попробовать ещё раз
+        </Button>
+      </Card>
+    );
+  }
+
   if (!goal) {
     return <GoalSetter onSave={handleSaveGoal} />;
   }

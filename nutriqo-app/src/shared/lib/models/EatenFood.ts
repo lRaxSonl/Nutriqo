@@ -9,8 +9,8 @@ export interface EatenFoodType extends BaseEntity {
   protein?: number;
   fats?: number;
   carbs?: number;
-  goal_id: string; // Foreign key
-  date: string; // ISO 8601 date when the food was eaten
+  goal_id: string; // Foreign key to goals collection
+  // NOTE: 'date' field is not stored. Use created_at/updated_at for temporal queries.
 }
 
 class EatenFood extends BaseModel<EatenFoodType> {
@@ -34,11 +34,14 @@ class EatenFood extends BaseModel<EatenFoodType> {
 
   /**
    * Получить продукты по дате
+   * Since there's no explicit 'date' field, this filters by created_at timestamp.
    */
   async getByDate(date: string): Promise<EatenFoodType[]> {
     try {
+      // Filter by created_at day matching the provided date (format: YYYY-MM-DD)
+      // This is a workaround since the date field doesn't exist in the collection
       return await this.client.collection(this.collection).getFullList({
-        filter: `date="${date}"`
+        filter: `created_at >= "${date}T00:00:00.000Z" && created_at < "${new Date(date + 'T23:59:59.999Z').toISOString()}"`
       });
     } catch (error) {
       console.error(`Error fetching eaten food for date ${date}:`, error);
