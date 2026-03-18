@@ -6,6 +6,7 @@
  */
 
 import { Goal, type GoalType } from '@/shared/lib/models/Goal';
+import { logger } from '@/shared/lib/logger';
 
 // Дефолтная модель для функций, не требующих аутентификации
 const goalModel = new Goal();
@@ -62,7 +63,9 @@ export async function setDailyGoal(
 
     return savedGoal;
   } catch (error) {
-    console.error('Error setting daily goal:', error);
+    logger.error('Failed to set daily goal', 'GOAL_SET_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
 
     if (error instanceof Error) {
       throw new Error(`Failed to set daily goal: ${error.message}`);
@@ -79,7 +82,9 @@ export async function getDailyGoal(userId: string): Promise<GoalType | null> {
   try {
     return await goalModel.getGoalByDate(userId);
   } catch (error) {
-    console.error('Error fetching daily goal:', error);
+    logger.error('Failed to fetch daily goal', 'GOAL_GET_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to fetch daily goal');
   }
 }
@@ -91,7 +96,9 @@ export async function getUserGoals(userId: string): Promise<GoalType[]> {
   try {
     return await goalModel.getGoalsByUser(userId);
   } catch (error) {
-    console.error('Error fetching user goals:', error);
+    logger.error('Failed to fetch user goals', 'GOAL_GET_USER_GOALS_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to fetch user goals');
   }
 }
@@ -115,7 +122,9 @@ export async function updateDailyGoal(
 
     return await goalModel.update(id, updateData);
   } catch (error) {
-    console.error('Error updating daily goal:', error);
+    logger.error('Failed to update daily goal', 'GOAL_UPDATE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to update daily goal');
   }
 }
@@ -127,7 +136,9 @@ export async function deleteGoal(id: string): Promise<void> {
   try {
     await goalModel.delete(id);
   } catch (error) {
-    console.error('Error deleting goal:', error);
+    logger.error('Failed to delete goal', 'GOAL_DELETE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to delete goal');
   }
 }

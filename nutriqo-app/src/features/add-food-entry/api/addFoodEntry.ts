@@ -8,6 +8,7 @@
 import { EatenFood, type EatenFoodType } from '@/shared/lib/models/EatenFood';
 import { Goal, type GoalType } from '@/shared/lib/models/Goal';
 import { MealType } from '@/shared/types/meals';
+import { logger } from '@/shared/lib/logger';
 import type BaseModel from '@/shared/lib/models/Base';
 
 // Дефолтные модели для функций, не требующих аутентификации
@@ -80,7 +81,9 @@ export async function addFoodEntry(
     return savedEntry;
   } catch (error) {
     // Логирование и пробрасывание ошибки
-    console.error('Error adding food entry:', error);
+    logger.error('Failed to add food entry', 'FOOD_ADD_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     
     if (error instanceof Error) {
       throw new Error(`Failed to add food entry: ${error.message}`);
@@ -97,7 +100,9 @@ export async function getFoodEntriesByGoal(goalId: string): Promise<EatenFoodTyp
   try {
     return await eatenFoodModel.getEatenFoodByGoal(goalId);
   } catch (error) {
-    console.error('Error fetching food entries:', error);
+    logger.error('Failed to fetch food entries', 'FOOD_GET_ENTRIES_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to fetch food entries');
   }
 }
@@ -109,7 +114,9 @@ export async function getFoodEntriesByDate(date: string): Promise<EatenFoodType[
   try {
     return await eatenFoodModel.getByDate(date);
   } catch (error) {
-    console.error('Error fetching food entries for date:', error);
+    logger.error('Failed to fetch food entries for date', 'FOOD_GET_BY_DATE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to fetch food entries for date');
   }
 }
@@ -121,7 +128,9 @@ export async function deleteFoodEntry(id: string): Promise<void> {
   try {
     await eatenFoodModel.delete(id);
   } catch (error) {
-    console.error('Error deleting food entry:', error);
+    logger.error('Failed to delete food entry', 'FOOD_DELETE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to delete food entry');
   }
 }
@@ -147,7 +156,9 @@ export async function updateFoodEntry(
 
     return await eatenFoodModel.update(id, updateData);
   } catch (error) {
-    console.error('Error updating food entry:', error);
+    logger.error('Failed to update food entry', 'FOOD_UPDATE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     throw new Error('Failed to update food entry');
   }
 }

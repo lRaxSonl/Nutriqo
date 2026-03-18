@@ -1,5 +1,6 @@
 import BaseModel, { BaseEntity } from './Base';
 import { pb } from '@/shared/lib/pocketbase';
+import { logger } from '../logger';
 import { MealType } from '@/shared/types/meals';
 
 export interface EatenFoodType extends BaseEntity {
@@ -27,7 +28,7 @@ class EatenFood extends BaseModel<EatenFoodType> {
         filter: `goal_id="${goalId}"`
       });
     } catch (error) {
-      console.error(`Error fetching eaten food for goal ${goalId}:`, error);
+      logger.error(`Failed to fetch eaten food for goal`, 'DB_GET_FOOD_BY_GOAL_ERROR', { goalId });
       throw new Error(`Failed to fetch eaten food for goal`);
     }
   }
@@ -44,7 +45,7 @@ class EatenFood extends BaseModel<EatenFoodType> {
         filter: `created_at >= "${date}T00:00:00.000Z" && created_at < "${new Date(date + 'T23:59:59.999Z').toISOString()}"`
       });
     } catch (error) {
-      console.error(`Error fetching eaten food for date ${date}:`, error);
+      logger.error(`Failed to fetch eaten food for date`, 'DB_GET_FOOD_BY_DATE_ERROR', { date });
       throw new Error(`Failed to fetch eaten food for date`);
     }
   }

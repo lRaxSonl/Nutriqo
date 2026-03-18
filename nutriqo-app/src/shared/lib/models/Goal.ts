@@ -1,5 +1,6 @@
 import BaseModel, { BaseEntity } from './Base';
 import { pb } from '@/shared/lib/pocketbase';
+import { logger } from '../logger';
 
 export interface GoalType extends BaseEntity {
   user_id: string;
@@ -25,7 +26,7 @@ class Goal extends BaseModel<GoalType> {
         filter: `user_id="${userId}"`
       });
     } catch (error) {
-      console.error(`Error fetching goals for user ${userId}:`, error);
+      logger.error(`Failed to fetch goals for user`, 'DB_GET_GOALS_ERROR', { userId });
       throw new Error(`Failed to fetch goals for user`);
     }
   }
@@ -51,7 +52,7 @@ class Goal extends BaseModel<GoalType> {
       
       return userGoals.length > 0 ? (userGoals[0] as unknown as GoalType) : null;
     } catch (error) {
-      console.error(`Error fetching goal for user ${userId}:`, error);
+      logger.error(`Failed to fetch goal for user`, 'DB_GET_GOAL_ERROR', { userId });
       throw error;
     }
   }
@@ -65,7 +66,7 @@ class Goal extends BaseModel<GoalType> {
         filter: `goal_id="${goalId}"`
       });
     } catch (error) {
-      console.error(`Error fetching eaten food for goal ${goalId}:`, error);
+      logger.error(`Failed to fetch eaten food for goal`, 'DB_GET_EATEN_FOOD_ERROR', { goalId });
       throw new Error(`Failed to fetch eaten food for goal`);
     }
   }

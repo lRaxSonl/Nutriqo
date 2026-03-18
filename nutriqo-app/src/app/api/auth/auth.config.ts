@@ -2,6 +2,32 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { createPocketBaseClient, getPocketBaseUsersCollection } from "@/shared/lib/pocketbase";
+import { logger } from "@/shared/lib/logger";
+
+/**
+ * Получить и валидировать NEXTAUTH_SECRET
+ */
+function getAuthSecret(): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      const errorMsg = 'NEXTAUTH_SECRET is not set. Generate it with: openssl rand -base64 32';
+      logger.error(errorMsg, 'AUTH_CONFIG_ERROR');
+      throw new Error(errorMsg);
+    }
+    
+    logger.warn('⚠️ NEXTAUTH_SECRET not set (development mode). Set it in production!');
+    return 'dev-insecure-secret-change-in-production';
+  }
+  
+  // Проверяем минимальную длину
+  if (secret.length < 32) {
+    logger.warn('⚠️ NEXTAUTH_SECRET is too short (< 32 chars)');
+  }
+  
+  return secret;
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -73,5 +99,5 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
   },
 
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: getAuthSecret(),
 };

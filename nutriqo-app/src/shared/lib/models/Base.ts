@@ -1,4 +1,5 @@
 import { pb, createAuthenticatedPocketBaseClient } from '@/shared/lib/pocketbase'
+import { logger } from '@/shared/lib/logger';
 import type PocketBase from 'pocketbase';
 
 /**
@@ -42,7 +43,7 @@ export default class BaseModel<T extends BaseEntity> {
         try {
             return await this.client.collection(this.collection).getFullList();
         } catch (error) {
-            console.error(`Error fetching from ${this.collection}:`, error);
+            logger.error(`Failed to fetch from collection`, 'DB_FETCH_ERROR', { collection: this.collection });
             throw new Error(`Failed to fetch ${this.collection}`);
         }
     }
@@ -54,7 +55,7 @@ export default class BaseModel<T extends BaseEntity> {
         try {
             return await this.client.collection(this.collection).getOne(id);
         } catch (error) {
-            console.error(`Error fetching ${id} from ${this.collection}:`, error);
+            logger.error(`Failed to fetch record`, 'DB_FETCH_BY_ID_ERROR', { collection: this.collection, id });
             throw new Error(`Record not found in ${this.collection}`);
         }
     }
@@ -67,9 +68,9 @@ export default class BaseModel<T extends BaseEntity> {
         try {
             return await this.client.collection(this.collection).create(data);
         } catch (error) {
-            console.error(`Error creating record in ${this.collection}:`, error);
             const err = error as { status?: number; message?: string; response?: { message?: string } };
             const details = err.response?.message || err.message || 'Unknown error';
+            logger.error(`Failed to create record`, 'DB_CREATE_ERROR', { collection: this.collection, details });
             throw new Error(`Failed to create record in ${this.collection}: ${details}`);
         }
     }
@@ -81,7 +82,7 @@ export default class BaseModel<T extends BaseEntity> {
         try {
             return await this.client.collection(this.collection).update(id, data);
         } catch (error) {
-            console.error(`Error updating ${id} in ${this.collection}:`, error);
+            logger.error(`Failed to update record`, 'DB_UPDATE_ERROR', { collection: this.collection, id });
             throw new Error(`Failed to update record in ${this.collection}`);
         }
     }
@@ -94,7 +95,7 @@ export default class BaseModel<T extends BaseEntity> {
             await this.client.collection(this.collection).delete(id);
             return true;
         } catch (error) {
-            console.error(`Error deleting ${id} from ${this.collection}:`, error);
+            logger.error(`Failed to delete record`, 'DB_DELETE_ERROR', { collection: this.collection, id });
             throw new Error(`Failed to delete record from ${this.collection}`);
         }
     }

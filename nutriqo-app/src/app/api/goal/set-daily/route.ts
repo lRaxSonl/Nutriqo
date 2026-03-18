@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth.config';
 import { setDailyGoal } from '@/features/set-daily-goals/api/setDailyGoal';
 import { Goal } from '@/shared/lib/models/Goal';
+import { logger } from '@/shared/lib/logger';
 
 /**
  * POST /api/goal/set-daily
@@ -32,6 +33,48 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { calories_goal, protein_goal, fats_goal, carbs_goal } = body;
 
+    // === ВАЛИДАЦИЯ ТИПОВ И ЗНАЧЕНИЙ ===
+
+    // Валидация calories_goal
+    const caloriesGoal = Number(calories_goal);
+    if (!Number.isFinite(caloriesGoal) || caloriesGoal < 500 || caloriesGoal > 10000) {
+      return NextResponse.json(
+        { error: 'Calories goal must be a number between 500 and 10000' },
+        { status: 400 }
+      );
+    }
+
+    // Валидация опциональных полей макронутриентов
+    if (protein_goal !== undefined) {
+      const proteinGoal = Number(protein_goal);
+      if (!Number.isFinite(proteinGoal) || proteinGoal < 0 || proteinGoal > 500) {
+        return NextResponse.json(
+          { error: 'Protein goal must be a number between 0 and 500' },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (fats_goal !== undefined) {
+      const fatsGoal = Number(fats_goal);
+      if (!Number.isFinite(fatsGoal) || fatsGoal < 0 || fatsGoal > 500) {
+        return NextResponse.json(
+          { error: 'Fats goal must be a number between 0 and 500' },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (carbs_goal !== undefined) {
+      const carbsGoal = Number(carbs_goal);
+      if (!Number.isFinite(carbsGoal) || carbsGoal < 0 || carbsGoal > 500) {
+        return NextResponse.json(
+          { error: 'Carbs goal must be a number between 0 and 500' },
+          { status: 400 }
+        );
+      }
+    }
+
     // Create authenticated Goal model instance with user's PocketBase token
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
 
@@ -39,37 +82,36 @@ export async function POST(request: NextRequest) {
     const goal = await setDailyGoal(
       {
         user_id: session.user.id,
-        calories_goal,
-        protein_goal,
-        fats_goal,
-        carbs_goal,
+        calories_goal: caloriesGoal,
+        protein_goal: protein_goal ? Number(protein_goal) : undefined,
+        fats_goal: fats_goal ? Number(fats_goal) : undefined,
+        carbs_goal: carbs_goal ? Number(carbs_goal) : undefined,
       },
       authenticatedGoalModel
     );
 
     return NextResponse.json(goal, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /api/goal/set-daily:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    const isPermissionError =
-      errorMessage.includes('Only superusers can perform this action') ||
-      errorMessage.includes('forbidden') ||
-      errorMessage.includes('403');
+    // Безопасное логирование без раскрытия деталей
+    logger.error('Failed to set daily goal', 'GOAL_SET_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
 
-    if (isPermissionError) {
-      return NextResponse.json(
-        {
-          error:
-            'PocketBase permissions error: goals Create rule allows only superusers. Set Create rule in goals to @request.auth.id != "" && user_id = @request.auth.id',
-        },
-        { status: 403 }
-      );
+    // Раскрываем только валидационные ошибки
+    if (error instanceof Error) {
+      if (error.message.includes('required')) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 }
+        );
+      }
     }
-    
+
+    // Для всех остальных ошибок - generic message
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }
 }
+

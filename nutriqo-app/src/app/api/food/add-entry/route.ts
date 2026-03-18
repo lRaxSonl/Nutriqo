@@ -4,6 +4,9 @@ import { authOptions } from '@/app/api/auth/auth.config';
 import { addFoodEntry } from '@/features/add-food-entry/api/addFoodEntry';
 import { EatenFood } from '@/shared/lib/models/EatenFood';
 import { Goal } from '@/shared/lib/models/Goal';
+import { logger } from '@/shared/lib/logger';
+
+const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 
 /**
  * POST /api/food/add-entry
@@ -33,10 +36,66 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, meal_type, calories, protein, fats, carbs, goal_id } = body;
 
-    // Validate that essential fields are present
-    if (!name || !meal_type || calories === undefined || !goal_id) {
+    // === ВАЛИДАЦИЯ ТИПОВ И ЗНАЧЕНИЙ ===
+
+    // Валидация name
+    if (typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, meal_type, calories, goal_id' },
+        { error: 'Food name is required and must be a string' },
+        { status: 400 }
+      );
+    }
+
+    if (name.length > 100) {
+      return NextResponse.json(
+        { error: 'Food name must be less than 100 characters' },
+        { status: 400 }
+      );
+    }
+
+    // Валидация meal_type
+    if (!VALID_MEAL_TYPES.includes(meal_type)) {
+      return NextResponse.json(
+        { error: `Meal type must be one of: ${VALID_MEAL_TYPES.join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    // Валидация calories
+    const caloriesNumber = Number(calories);
+    if (!Number.isFinite(caloriesNumber) || caloriesNumber < 0 || caloriesNumber > 10000) {
+      return NextResponse.json(
+        { error: 'Calories must be a number between 0 and 10000' },
+        { status: 400 }
+      );
+    }
+
+    // Валидация goal_id
+    if (typeof goal_id !== 'string' || goal_id.length === 0) {
+      return NextResponse.json(
+        { error: 'Goal ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Валидация опциональных полей
+    if (protein !== undefined && (typeof protein !== 'number' && typeof protein !== 'string')) {
+      return NextResponse.json(
+        { error: 'Protein must be a number' },
+        { status: 400 }
+      );
+    }
+
+    if (fats !== undefined && (typeof fats !== 'number' && typeof fats !== 'string')) {
+      return NextResponse.json(
+        { error: 'Fats must be a number' },
+        { status: 400 }
+      );
+    }
+
+    if (carbs !== undefined && (typeof carbs !== 'number' && typeof carbs !== 'string')) {
+      return NextResponse.json(
+        { error: 'Carbs must be a number' },
         { status: 400 }
       );
     }
@@ -48,13 +107,13 @@ export async function POST(request: NextRequest) {
     // Call API function to save food entry
     const entry = await addFoodEntry(
       {
-        name: String(name),
-        meal_type: String(meal_type) as any,
-        calories: Number(calories),
+        name: name.trim(),
+        meal_type: meal_type as any,
+        calories: caloriesNumber,
         protein: protein ? Number(protein) : undefined,
         fats: fats ? Number(fats) : undefined,
         carbs: carbs ? Number(carbs) : undefined,
-        goal_id: String(goal_id),
+        goal_id,
       },
       authenticatedEatenFoodModel,
       authenticatedGoalModel
@@ -62,27 +121,33 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
-    console.error('Error in POST /api/food/add-entry:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    const isPermissionError =
-      errorMessage.includes('Only superusers can perform this action') ||
-      errorMessage.includes('forbidden') ||
-      errorMessage.includes('403');
+    // Безопасное логирование без раскрытия деталей
+    logger.error('Failed to add food entry', 'FOOD_ADD_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
 
-    if (isPermissionError) {
-      return NextResponse.json(
-        {
-          error:
-            'PocketBase permissions error: collection Create rule allows only superusers. Update collection rules for regular auth users.',
-        },
-        { status: 403 }
-      );
+    // Раскрываем только валидационные ошибки
+    if (error instanceof Error) {
+      if (error.message.includes('Goal not found')) {
+        return NextResponse.json(
+          { error: 'Goal not found. Please set a daily goal first.' },
+          { status: 404 }
+        );
+      }
+
+      if (error.message.includes('required')) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 }
+        );
+      }
     }
-    
+
+    // Для всех остальных ошибок - generic message
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'An error occurred while processing your request' },
       { status: 500 }
     );
   }
 }
+

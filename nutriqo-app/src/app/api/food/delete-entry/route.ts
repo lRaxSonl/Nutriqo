@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth.config';
 import { EatenFood } from '@/shared/lib/models/EatenFood';
+import { logger } from '@/shared/lib/logger';
 
 /**
  * DELETE /api/food/delete-entry
@@ -42,24 +43,20 @@ export async function DELETE(request: NextRequest) {
     const authenticatedEatenFoodModel = new EatenFood().withAuthToken(pbToken);
 
     // Удаляем запись
-    try {
-      await authenticatedEatenFoodModel.delete(entryId);
-    } catch (deleteError) {
-      console.error('Error deleting food entry:', deleteError);
-      throw deleteError;
-    }
+    await authenticatedEatenFoodModel.delete(entryId);
 
     return NextResponse.json(
       { success: true, message: 'Food entry deleted successfully' },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error in DELETE /api/food/delete-entry:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    // Безопасное логирование без раскрытия деталей
+    logger.error('Failed to delete food entry', 'FOOD_DELETE_ERROR', {
+      errorMessage: error instanceof Error ? error.message : 'Unknown',
+    });
     
     return NextResponse.json(
-      { error: errorMessage },
+      { error: 'An error occurred while deleting your food entry' },
       { status: 500 }
     );
   }

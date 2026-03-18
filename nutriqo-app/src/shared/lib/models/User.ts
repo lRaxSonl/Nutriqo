@@ -1,5 +1,6 @@
 import BaseModel, { BaseEntity } from './Base';
 import { pb } from '@/shared/lib/pocketbase';
+import { logger } from '../logger';
 
 export interface UserType extends BaseEntity {
   email: string;
@@ -25,7 +26,7 @@ class User extends BaseModel<UserType> {
       });
       return (users.length > 0 ? users[0] : null) as unknown as UserType | null;
     } catch (error) {
-      console.error(`Error fetching user by email ${email}:`, error);
+      logger.error(`Failed to fetch user by email`, 'DB_GET_USER_ERROR', { email });
       throw new Error(`Failed to fetch user by email`);
     }
   }
@@ -39,7 +40,7 @@ class User extends BaseModel<UserType> {
         filter: `user_id="${userId}"`
       });
     } catch (error) {
-      console.error(`Error fetching goals for user ${userId}:`, error);
+      logger.error(`Failed to fetch goals for user`, 'DB_GET_USER_GOALS_ERROR', { userId });
       throw new Error(`Failed to fetch goals for user`);
     }
   }
