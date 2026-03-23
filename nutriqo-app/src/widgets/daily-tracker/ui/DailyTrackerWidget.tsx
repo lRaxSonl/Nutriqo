@@ -48,7 +48,7 @@ export const DailyTrackerWidget = () => {
           
           // Загружаем съеденные продукты для этой цели
           try {
-            const entriesResponse = await fetch('/api/food/get-entries');
+            const entriesResponse: Response = await fetch('/api/food/get-entries');
             if (entriesResponse.ok) {
               const entriesData = await entriesResponse.json();
               const formattedEntries = entriesData.map((entry: any) => ({
