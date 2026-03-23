@@ -7,6 +7,7 @@ import { Card } from '@/shared/ui/Card/Card';
 import { Input } from '@/shared/ui/Input/Input';
 import { Button } from '@/shared/ui/Button/Button';
 import { DailyGoal } from '@/entities/food/model/types';
+import { extractErrorMessage, extractGoalId, extractResponseError } from '../api/errorHandling';
 
 interface GoalSetterProps {
   onSave: (goal: DailyGoal, goalId?: string) => void;
@@ -124,14 +125,14 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
           await signOut({ callbackUrl: '/login' });
           return;
         }
-        const errorMessage = (response.data as Record<string, string | unknown>)?.error;
-        if (response.status === 403 && typeof errorMessage === 'string' && errorMessage.includes('PocketBase permissions error')) {
+        const errorMessage = extractResponseError(response.data);
+        if (response.status === 403 && errorMessage?.includes('PocketBase permissions error')) {
           throw new Error('PocketBase запрещает создание goals для обычного пользователя. Исправь Create rule в коллекции goals.');
         }
-        throw new Error(typeof errorMessage === 'string' ? errorMessage : 'Ошибка при сохранении цели');
+        throw new Error(errorMessage || 'Ошибка при сохранении цели');
       }
 
-      const goalData = response.data as Record<string, unknown>;
+      const goalId = extractGoalId(response.data);
 
       // Преобразуем ответ в формат DailyGoal для UI
       const goal: DailyGoal = {
@@ -141,10 +142,10 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
         carbs: carbsValue,
       };
 
-      onSave(goal, goalData.id);
+      onSave(goal, goalId);
       setIsEditing(false);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Ошибка при сохранении цели';
+      const errorMessage = extractErrorMessage(err);
       setError(errorMessage);
       console.error('Error saving goal:', err);
     } finally {
@@ -168,8 +169,8 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
           await signOut({ callbackUrl: '/login' });
           return;
         }
-        const errorMessage = (response.data as Record<string, string | unknown>)?.error;
-        const msg = typeof errorMessage === 'string' ? errorMessage : 'Ошибка при удалении цели';
+        const errorMessage = extractResponseError(response.data);
+        const msg = errorMessage || 'Ошибка при удалении цели';
         console.error('❌ Ошибка удаления цели:', {
           status: response.status,
           error: msg,
@@ -184,7 +185,7 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
       }
       console.log('✅ Цель успешно удалена');
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Ошибка при удалении цели';
+      const errorMessage = extractErrorMessage(err);
       setError(errorMessage);
       console.error('❌ Ошибка при удалении цели:', {
         message: errorMessage,
@@ -276,7 +277,7 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
               </Button>
               <Button 
                 type="button" 
-                variant="default"
+                variant="danger"
                 onClick={handleDeleteGoal}
                 disabled={isLoading || isDeleting}
                 className="text-error border-error hover:bg-error/10"
