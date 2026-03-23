@@ -16,6 +16,9 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
   const { data: session } = useSession();
   
   const [calories, setCalories] = useState(initialGoal?.calories.toString() || '2000');
+  const [protein, setProtein] = useState(initialGoal?.protein ? initialGoal.protein.toString() : '');
+  const [fats, setFats] = useState(initialGoal?.fats ? initialGoal.fats.toString() : '');
+  const [carbs, setCarbs] = useState(initialGoal?.carbs ? initialGoal.carbs.toString() : '');
   const [isEditing, setIsEditing] = useState(!initialGoal);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +30,11 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
           <div>
             <span className="text-sm text-primary font-medium">Ваша цель на сегодня</span>
             <div className="text-2xl font-bold text-foreground">{initialGoal.calories} ккал</div>
+            {(initialGoal.protein > 0 || initialGoal.fats > 0 || initialGoal.carbs > 0) && (
+              <div className="text-sm text-foreground-secondary mt-1">
+                Б: {initialGoal.protein}g | Ж: {initialGoal.fats}g | У: {initialGoal.carbs}g
+              </div>
+            )}
           </div>
           <Button variant="secondary" onClick={() => setIsEditing(true)}>
             Изменить
@@ -42,9 +50,27 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
     setError(null);
 
     const calValue = parseInt(calories) || 0;
+    const proteinValue = protein ? parseInt(protein) : 0;
+    const fatsValue = fats ? parseInt(fats) : 0;
+    const carbsValue = carbs ? parseInt(carbs) : 0;
 
     if (calValue < 500 || calValue > 10000) {
       setError('Цель должна быть от 500 до 10000 ккал');
+      return;
+    }
+
+    if (proteinValue < 0 || proteinValue > 500) {
+      setError('Белки должны быть от 0 до 500g');
+      return;
+    }
+
+    if (fatsValue < 0 || fatsValue > 500) {
+      setError('Жиры должны быть от 0 до 500g');
+      return;
+    }
+
+    if (carbsValue < 0 || carbsValue > 500) {
+      setError('Углеводы должны быть от 0 до 500g');
       return;
     }
 
@@ -64,6 +90,9 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
         },
         body: JSON.stringify({
           calories_goal: calValue,
+          ...(proteinValue > 0 && { protein_goal: proteinValue }),
+          ...(fatsValue > 0 && { fats_goal: fatsValue }),
+          ...(carbsValue > 0 && { carbs_goal: carbsValue }),
         }),
       });
 
@@ -84,9 +113,9 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
       // Преобразуем ответ в формат DailyGoal для UI
       const goal: DailyGoal = {
         calories: calValue,
-        protein: 0,
-        fats: 0,
-        carbs: 0,
+        protein: proteinValue,
+        fats: fatsValue,
+        carbs: carbsValue,
       };
 
       onSave(goal, goalData.id);
@@ -101,7 +130,7 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
   };
 
   return (
-    <Card title="Установите цель калорий" className="mb-6">
+    <Card title="Установите цели на день" className="mb-6">
       <form onSubmit={handleSubmit} className="space-y-4">
         
         {/* Сообщение об ошибке */}
@@ -111,17 +140,58 @@ export const GoalSetter = ({ onSave, initialGoal }: GoalSetterProps) => {
           </div>
         )}
 
-        <div className="flex gap-4 items-end">
+        {/* Калории */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Input
             type="number"
             label="Ккал в день"
             value={calories}
             onChange={(e) => setCalories(e.target.value)}
             disabled={isLoading}
-            className="w-40"
             min="500"
             max="10000"
+            required
           />
+          
+          {/* Белки */}
+          <Input
+            type="number"
+            label="Белки (g)"
+            value={protein}
+            onChange={(e) => setProtein(e.target.value)}
+            disabled={isLoading}
+            min="0"
+            max="500"
+            placeholder="Опционально"
+          />
+
+          {/* Жиры */}
+          <Input
+            type="number"
+            label="Жиры (g)"
+            value={fats}
+            onChange={(e) => setFats(e.target.value)}
+            disabled={isLoading}
+            min="0"
+            max="500"
+            placeholder="Опционально"
+          />
+
+          {/* Углеводы */}
+          <Input
+            type="number"
+            label="Углеводы (g)"
+            value={carbs}
+            onChange={(e) => setCarbs(e.target.value)}
+            disabled={isLoading}
+            min="0"
+            max="500"
+            placeholder="Опционально"
+          />
+        </div>
+
+        {/* Кнопки */}
+        <div className="flex gap-4">
           <Button 
             type="submit" 
             disabled={isLoading}

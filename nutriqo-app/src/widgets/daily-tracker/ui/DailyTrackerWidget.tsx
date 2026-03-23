@@ -126,12 +126,34 @@ export const DailyTrackerWidget = () => {
     }
   };
 
+  // Функция для определения цвета прогресс-бара
+  const getProgressColor = (percent: number) => {
+    if (percent <= 80) return 'bg-success';
+    if (percent <= 99) return 'bg-warning';
+    return 'bg-error';
+  };
+
   // Подсчет итогов
   const totalCalories = useMemo(() => 
     entries.reduce((sum, item) => sum + (Number(item.calories) || 0), 0), 
   [entries]);
 
-  const progress = goal ? Math.min((totalCalories / goal.calories) * 100, 100) : 0;
+  const totalProtein = useMemo(() => 
+    entries.reduce((sum, item) => sum + (Number(item.protein) || 0), 0),
+  [entries]);
+
+  const totalFats = useMemo(() =>
+    entries.reduce((sum, item) => sum + (Number(item.fats) || 0), 0),
+  [entries]);
+
+  const totalCarbs = useMemo(() =>
+    entries.reduce((sum, item) => sum + (Number(item.carbs) || 0), 0),
+  [entries]);
+
+  const caloriesProgress = goal ? Math.min((totalCalories / goal.calories) * 100, 100) : 0;
+  const proteinProgress = goal && goal.protein > 0 ? Math.min((totalProtein / goal.protein) * 100, 100) : 0;
+  const fatsProgress = goal && goal.fats > 0 ? Math.min((totalFats / goal.fats) * 100, 100) : 0;
+  const carbsProgress = goal && goal.carbs > 0 ? Math.min((totalCarbs / goal.carbs) * 100, 100) : 0;
 
   // Группировка по приемам пищи
   const groupedMeals = useMemo(() => {
@@ -201,22 +223,79 @@ export const DailyTrackerWidget = () => {
               {totalCalories} <span className="text-lg font-normal text-primary">/ {goal.calories} ккал</span>
             </div>
           </div>
-          <Badge variant={progress > 100 ? 'default' : 'success'} className="text-sm px-3 py-1">
-            {Math.round(progress)}%
+          <Badge variant={caloriesProgress > 100 ? 'default' : 'success'} className="text-sm px-3 py-1">
+            {Math.round(caloriesProgress)}%
           </Badge>
         </div>
         
-        {/* Полоска прогресса */}
+        {/* Полоска прогресса для калорий */}
         <div className="w-full bg-primary/20 rounded-full h-5 overflow-hidden shadow-inner">
           <div 
-            className={`h-full transition-all duration-700 ease-out ${
-              progress > 100 ? 'bg-error' : 'bg-success'
-            }`}
-            style={{ width: `${progress}%` }}
+            className={`h-full transition-all duration-700 ease-out ${getProgressColor(caloriesProgress)}`}
+            style={{ width: `${caloriesProgress}%` }}
           />
         </div>
-        {progress > 100 && (
-          <p className="text-error text-sm mt-2 font-medium">⚠️ Цель превышена на {Math.round(progress - 100)}%</p>
+        {caloriesProgress > 100 && (
+          <p className="text-error text-sm mt-2 font-medium">⚠️ Цель превышена на {Math.round(caloriesProgress - 100)}%</p>
+        )}
+
+        {/* БЖУ бары (показываем только если цели установлены) */}
+        {(goal.protein > 0 || goal.fats > 0 || goal.carbs > 0) && (
+          <div className="mt-6 space-y-4">
+            {/* Белки */}
+            {goal.protein > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-foreground">Белки</span>
+                  <span className="text-sm text-foreground">
+                    {totalProtein}g <span className="text-foreground-secondary">/ {goal.protein}g</span>
+                  </span>
+                </div>
+                <div className="w-full bg-primary/20 rounded-full h-3 overflow-hidden shadow-inner">
+                  <div 
+                    className={`h-full transition-all duration-700 ease-out ${getProgressColor(proteinProgress)}`}
+                    style={{ width: `${proteinProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Жиры */}
+            {goal.fats > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-foreground">Жиры</span>
+                  <span className="text-sm text-foreground">
+                    {totalFats}g <span className="text-foreground-secondary">/ {goal.fats}g</span>
+                  </span>
+                </div>
+                <div className="w-full bg-primary/20 rounded-full h-3 overflow-hidden shadow-inner">
+                  <div 
+                    className={`h-full transition-all duration-700 ease-out ${getProgressColor(fatsProgress)}`}
+                    style={{ width: `${fatsProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Углеводы */}
+            {goal.carbs > 0 && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-foreground">Углеводы</span>
+                  <span className="text-sm text-foreground">
+                    {totalCarbs}g <span className="text-foreground-secondary">/ {goal.carbs}g</span>
+                  </span>
+                </div>
+                <div className="w-full bg-primary/20 rounded-full h-3 overflow-hidden shadow-inner">
+                  <div 
+                    className={`h-full transition-all duration-700 ease-out ${getProgressColor(carbsProgress)}`}
+                    style={{ width: `${carbsProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </Card>
 
@@ -235,21 +314,28 @@ export const DailyTrackerWidget = () => {
           if (meals.length === 0) return null;
 
           const mealCalories = meals.reduce((s, m) => s + (Number(m.calories) || 0), 0);
+          const mealProtein = meals.reduce((s, m) => s + (Number(m.protein) || 0), 0);
+          const mealFats = meals.reduce((s, m) => s + (Number(m.fats) || 0), 0);
+          const mealCarbs = meals.reduce((s, m) => s + (Number(m.carbs) || 0), 0);
 
           return (
             <Card key={type} title={`${mealLabels[type]} (${mealCalories} ккал)`} className="min-h-[160px]">
               <ul className="space-y-3">
                 {meals.map((item) => (
-                  <li key={item.id} className="flex justify-between items-center group p-2 hover:bg-background-secondary rounded-lg transition-colors">
-                    <div className="flex flex-col">
+                  <li key={item.id} className="flex justify-between items-start group p-2 hover:bg-background-secondary rounded-lg transition-colors">
+                    <div className="flex flex-col flex-1">
                       <span className="font-medium text-foreground">{item.name}</span>
                       <span className="text-xs text-foreground-secondary">
                         {item.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      {/* БЖУ информация */}
+                      <span className="text-xs text-foreground-secondary mt-1">
+                        Б: {item.protein}g | Ж: {item.fats}g | У: {item.carbs}g
+                      </span>
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-foreground">{item.calories} ккал</span>
+                    <div className="flex items-center gap-3 ml-3">
+                      <span className="font-bold text-foreground whitespace-nowrap">{item.calories} ккал</span>
                       <button 
                         onClick={() => handleDeleteEntry(item.id)}
                         className="text-foreground-secondary hover:text-error opacity-0 group-hover:opacity-100 transition-all p-1"
