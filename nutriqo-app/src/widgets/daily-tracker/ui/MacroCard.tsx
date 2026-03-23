@@ -27,7 +27,7 @@ export const MacroCard: React.FC<MacroCardProps> = ({
   return (
     <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 dark:bg-gray-900 dark:border-gray-800 flex items-center gap-4">
       <div className={`w-12 h-12 rounded-xl ${bgLight} ${bgDark} flex items-center justify-center flex-shrink-0`}>
-        <Image src={iconSrc} alt={label} width={24} height={24} />
+        <Image src={iconSrc} alt={label} width={36} height={36} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-end mb-1">

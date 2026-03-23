@@ -269,10 +269,12 @@ export const DailyTrackerWidget = () => {
 
       {/* Форма добавления */}
       {goalId && (
-        <AddFoodForm 
-          goalId={goalId} 
-          onAdd={handleAddEntry} 
-        />
+        <div className="w-full">
+          <AddFoodForm 
+            goalId={goalId} 
+            onAdd={handleAddEntry} 
+          />
+        </div>
       )}
 
       {/* Список по категориям или пустое состояние */}

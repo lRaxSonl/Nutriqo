@@ -37,8 +37,8 @@ export const MacroCardsStack: React.FC<MacroCardsStackProps> = ({
           target={goal.protein}
           progress={proteinProgress}
           iconSrc="/protein.svg"
-          bgLight="bg-blue-100"
-          bgDark="dark:bg-blue-800/20"
+          bgLight="bg-blue-500"
+          bgDark="dark:bg-blue-500"
           progressColor="bg-blue-500"
         />
       )}
@@ -51,8 +51,8 @@ export const MacroCardsStack: React.FC<MacroCardsStackProps> = ({
           target={goal.fats}
           progress={fatsProgress}
           iconSrc="/fats.svg"
-          bgLight="bg-yellow-100"
-          bgDark="dark:bg-yellow-600/15"
+          bgLight="bg-yellow-500"
+          bgDark="dark:bg-yellow-500"
           progressColor="bg-yellow-500"
         />
       )}
@@ -65,8 +65,8 @@ export const MacroCardsStack: React.FC<MacroCardsStackProps> = ({
           target={goal.carbs}
           progress={carbsProgress}
           iconSrc="/carbohydrates.svg"
-          bgLight="bg-purple-100"
-          bgDark="dark:bg-purple-800/20"
+          bgLight="bg-purple-500"
+          bgDark="dark:bg-purple-500"
           progressColor="bg-purple-500"
         />
       )}
