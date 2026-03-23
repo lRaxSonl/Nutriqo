@@ -166,13 +166,14 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="space-y-4 ">
           {/* Первая строка: Название, Калории, Тип еды */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Название */}
             <div className="md:col-span-6">
               <Input
-                placeholder="Название (например, Яблоко)"
+                label="Название"
+                placeholder="Например, Яблоко"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isLoading}
@@ -197,6 +198,7 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
             {/* Тип еды */}
             <div className="md:col-span-3">
               <Select
+                label="Тип еды"
                 options={mealOptions}
                 value={mealType}
                 onChange={(e) => setMealType(e.target.value as MealType)}
