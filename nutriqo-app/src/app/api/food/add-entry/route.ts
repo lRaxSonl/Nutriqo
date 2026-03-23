@@ -121,9 +121,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(entry, { status: 201 });
   } catch (error) {
-    // Безопасное логирование без раскрытия деталей
+    // Безопасное логирование с деталями
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error('Failed to add food entry', 'FOOD_ADD_ERROR', {
-      errorMessage: error instanceof Error ? error.message : 'Unknown',
+      errorMessage: errorMsg,
+      stack: errorStack,
     });
 
     // Раскрываем только валидационные ошибки
@@ -141,6 +145,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      
+      // Логируем в консоль для диагностики
+      console.error('Food entry creation failed:', {
+        message: errorMsg,
+        stack: errorStack,
+      });
     }
 
     // Для всех остальных ошибок - generic message

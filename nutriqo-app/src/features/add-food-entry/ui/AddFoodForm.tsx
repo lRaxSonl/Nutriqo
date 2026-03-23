@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useSession } from 'next-auth/react';
+import { httpClient } from '@/shared/api';
 // Импортируем наши UI компоненты из Shared
 import { Card } from '@/shared/ui/Card/Card';
 import { Input } from '@/shared/ui/Input/Input';
@@ -22,6 +23,9 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
   // Состояния формы
   const [name, setName] = useState('');
   const [calories, setCalories] = useState('');
+  const [protein, setProtein] = useState('');
+  const [fats, setFats] = useState('');
+  const [carbs, setCarbs] = useState('');
   const [mealType, setMealType] = useState<MealType>('breakfast');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,20 +38,58 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
     { value: 'snack', label: '🍎 Перекус' },
   ];
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Функция для автоматического расчета БЖУ из калорий
+  const calculateMacros = () => {
+    const cal = parseInt(calories) || 0;
+    if (cal <= 0) {
+      setError('Введите калории для расчета');
+      return;
+    }
+
+    // Стандартное соотношение: Б 20%, Ж 30%, У 50%
+    const calculatedProtein = Math.round((cal * 0.2) / 4);
+    const calculatedFats = Math.round((cal * 0.3) / 9);
+    const calculatedCarbs = Math.round((cal * 0.5) / 4);
+
+    setProtein(calculatedProtein.toString());
+    setFats(calculatedFats.toString());
+    setCarbs(calculatedCarbs.toString());
+    setError(null);
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     setError(null);
 
     // Простая валидация
     if (!name.trim() || !calories) {
-      setError('Пожалуйста, заполните все поля');
+      setError('Пожалуйста, заполните хотя бы название и калории');
       return;
     }
 
     const parsedCalories = Number(calories);
     if (!Number.isFinite(parsedCalories) || parsedCalories <= 0) {
       setError('Калории должны быть больше 0');
+      return;
+    }
+
+    const parsedProtein = protein ? Number(protein) : 0;
+    const parsedFats = fats ? Number(fats) : 0;
+    const parsedCarbs = carbs ? Number(carbs) : 0;
+
+    if (parsedProtein < 0 || parsedProtein > 500) {
+      setError('Белки должны быть от 0 до 500g');
+      return;
+    }
+
+    if (parsedFats < 0 || parsedFats > 500) {
+      setError('Жиры должны быть от 0 до 500g');
+      return;
+    }
+
+    if (parsedCarbs < 0 || parsedCarbs > 500) {
+      setError('Углеводы должны быть от 0 до 500g');
       return;
     }
 
@@ -60,25 +102,22 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
 
     try {
       // Вызываем API endpoint для сохранения в БД
-      const response = await fetch('/api/food/add-entry', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          calories: parsedCalories,
-          meal_type: mealType,
-          goal_id: goalId,
-        }),
+      const response = await httpClient.post('/api/food/add-entry', {
+        name: name.trim(),
+        calories: parsedCalories,
+        ...(parsedProtein > 0 && { protein: parsedProtein }),
+        ...(parsedFats > 0 && { fats: parsedFats }),
+        ...(parsedCarbs > 0 && { carbs: parsedCarbs }),
+        meal_type: mealType,
+        goal_id: goalId,
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка при добавлении продукта');
+        const errorMessage = (response.data as Record<string, string | unknown>)?.error;
+        throw new Error(typeof errorMessage === 'string' ? errorMessage : 'Ошибка при добавлении продукта');
       }
 
-      const entry = await response.json();
+      const entry = response.data as any;
 
       // Преобразуем ответ в формат FoodEntry для UI
       const uiEntry: FoodEntry = {
@@ -98,6 +137,9 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
       // Очищаем форму
       setName('');
       setCalories('');
+      setProtein('');
+      setFats('');
+      setCarbs('');
       setMealType('breakfast');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Неизвестная ошибка';
@@ -124,52 +166,111 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-          
-          {/* Поле названия (занимает 5 колонок на больших экранах) */}
-          <div className="md:col-span-5">
-            <Input
-              placeholder="Название (например, Яблоко)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={isLoading}
-              required
-            />
+        <div className="space-y-4">
+          {/* Первая строка: Название, Калории, Тип еды */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Название */}
+            <div className="md:col-span-6">
+              <Input
+                placeholder="Название (например, Яблоко)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={isLoading}
+                required
+              />
+            </div>
+
+            {/* Калории */}
+            <div className="md:col-span-3">
+              <Input
+                type="number"
+                label="Ккал"
+                placeholder="0"
+                value={calories}
+                onChange={(e) => setCalories(e.target.value)}
+                disabled={isLoading}
+                required
+                min="0"
+              />
+            </div>
+
+            {/* Тип еды */}
+            <div className="md:col-span-3">
+              <Select
+                options={mealOptions}
+                value={mealType}
+                onChange={(e) => setMealType(e.target.value as MealType)}
+                disabled={isLoading}
+              />
+            </div>
           </div>
 
-          {/* Поле калорий (занимает 3 колонки) */}
-          <div className="md:col-span-3">
-            <Input
-              type="number"
-              placeholder="Ккал"
-              value={calories}
-              onChange={(e) => setCalories(e.target.value)}
-              disabled={isLoading}
-              required
-              min="0"
-            />
+          {/* БЖУ поля */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Белки */}
+            <div className="md:col-span-3">
+              <Input
+                type="number"
+                label="Белки (g)"
+                placeholder="Опционально"
+                value={protein}
+                onChange={(e) => setProtein(e.target.value)}
+                disabled={isLoading}
+                min="0"
+                max="500"
+              />
+            </div>
+
+            {/* Жиры */}
+            <div className="md:col-span-3">
+              <Input
+                type="number"
+                label="Жиры (g)"
+                placeholder="Опционально"
+                value={fats}
+                onChange={(e) => setFats(e.target.value)}
+                disabled={isLoading}
+                min="0"
+                max="500"
+              />
+            </div>
+
+            {/* Углеводы */}
+            <div className="md:col-span-3">
+              <Input
+                type="number"
+                label="Углеводы (g)"
+                placeholder="Опционально"
+                value={carbs}
+                onChange={(e) => setCarbs(e.target.value)}
+                disabled={isLoading}
+                min="0"
+                max="500"
+              />
+            </div>
+
+            {/* Кнопка "Рассчитать" */}
+            <div className="md:col-span-3 flex items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={calculateMacros}
+                disabled={!calories || isLoading}
+              >
+                📊 Рассчитать
+              </Button>
+            </div>
           </div>
 
-          {/* Выбор типа еды (занимает 2 колонки) */}
-          <div className="md:col-span-2">
-            <Select
-              options={mealOptions}
-              value={mealType}
-              onChange={(e) => setMealType(e.target.value as MealType)}
-              disabled={isLoading}
-            />
-          </div>
-
-          {/* Кнопка (занимает 2 колонки) */}
-          <div className="md:col-span-2">
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={!name.trim() || !calories || isLoading}
-            >
-              {isLoading ? 'Добавляется...' : 'Добавить'}
-            </Button>
-          </div>
+          {/* Кнопка "Добавить" на весь размер */}
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!name.trim() || !calories || isLoading}
+          >
+            {isLoading ? '⏳ Добавляется...' : '➕ Добавить продукт'}
+          </Button>
         </div>
       </form>
     </Card>

@@ -2,10 +2,11 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { httpClient } from '@/shared/api';
 import { Card } from '@/shared/ui/Card/Card';
 import { Badge } from '@/shared/ui/Badge/Badge';
 import { Button } from '@/shared/ui/Button/Button';
-import { GoalSetter } from '@/features/set-daily-goals/ui/GoalSetter'; // Проверьте путь к файлу!
+import { GoalSetter } from '@/features/set-daily-goals/ui/GoalSetter';
 import { AddFoodForm } from '@/features/add-food-entry/ui/AddFoodForm';
 import { DailyGoal, FoodEntry, MealType } from '@/entities/food/model/types';
 
@@ -34,10 +35,10 @@ export const DailyTrackerWidget = () => {
     const loadDailyGoal = async () => {
       setLoadingError(null);
       try {
-        const response = await fetch('/api/goal/get-daily');
+        const response = await httpClient.get('/api/goal/get-daily');
         
         if (response.ok) {
-          const goalData = await response.json();
+          const goalData = response.data as any;
           setGoal({
             calories: goalData.calories_goal,
             protein: goalData.protein_goal || 0,
@@ -48,9 +49,9 @@ export const DailyTrackerWidget = () => {
           
           // Загружаем съеденные продукты для этой цели
           try {
-            const entriesResponse: Response = await fetch('/api/food/get-entries');
+            const entriesResponse = await httpClient.get('/api/food/get-entries');
             if (entriesResponse.ok) {
-              const entriesData = await entriesResponse.json();
+              const entriesData = entriesResponse.data as any[];
               const formattedEntries = entriesData.map((entry: any) => ({
                 id: entry.id,
                 name: entry.name,
@@ -67,21 +68,19 @@ export const DailyTrackerWidget = () => {
             console.error('Error loading entries:', entriesError);
             // Don't set error state for entries - goal loaded successfully
           }
-        } else if (response.status === 404) {
+        }
+      } catch (error: any) {
+        // Проверяем статус ошибки
+        if (error?.status === 404) {
           // Цели за сегодня нет - пользователь должен создать её
           setGoal(null);
           setGoalId(null);
           setEntries([]);
         } else {
-          const errorData = await response.json();
-          const errorMsg = errorData?.error || `Failed to load daily goal: ${response.status}`;
+          const errorMsg = error?.message || 'Failed to load daily goal';
           setLoadingError(errorMsg);
           console.error('Failed to load daily goal:', errorMsg);
         }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        setLoadingError(errorMsg);
-        console.error('Error loading daily goal:', error);
       } finally {
         setIsLoadingGoal(false);
       }
@@ -98,6 +97,13 @@ export const DailyTrackerWidget = () => {
     }
   };
 
+  // Обработчик удаления цели
+  const handleDeleteGoal = () => {
+    setGoal(null);
+    setGoalId(null);
+    setEntries([]);
+  };
+
   // Обработчик добавления записи (приходит из формы)
   const handleAddEntry = (data: FoodEntry) => {
     setEntries((prev) => [data, ...prev]);
@@ -105,24 +111,33 @@ export const DailyTrackerWidget = () => {
 
   // Обработчик удаления записи
   const handleDeleteEntry = async (id: string) => {
+    if (!window.confirm('Вы уверены, что хотите удалить этот продукт?')) {
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/food/delete-entry?entryId=${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await httpClient.delete(`/api/food/delete-entry?entryId=${id}`);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Failed to delete entry:', errorData.error);
+        const errorData = response.data as Record<string, unknown>;
+        const errorMsg = typeof errorData?.error === 'string' 
+          ? errorData.error 
+          : 'Ошибка при удалении продукта';
+        console.error('❌ Ошибка удаления продукта:', {
+          status: response.status,
+          error: errorMsg,
+          fullResponse: errorData,
+        });
+        alert(`Ошибка: ${errorMsg}`);
         return;
       }
 
       // Удаляем из локального состояния только если успешно удалили с сервера
       setEntries((prev) => prev.filter((item) => item.id !== id));
     } catch (error) {
-      console.error('Error deleting food entry:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Ошибка при удалении продукта';
+      console.error('Error deleting food entry:', errorMsg);
+      // Можно добавить toast уведомление здесь
     }
   };
 
@@ -212,7 +227,7 @@ export const DailyTrackerWidget = () => {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Блок цели (теперь в режиме просмотра) */}
-      <GoalSetter initialGoal={goal} onSave={handleSaveGoal} />
+      <GoalSetter initialGoal={goal} onSave={handleSaveGoal} onDelete={handleDeleteGoal} />
 
       {/* Прогресс бар */}
       <Card className="bg-gradient-to-r from-background to-background-secondary border-border">

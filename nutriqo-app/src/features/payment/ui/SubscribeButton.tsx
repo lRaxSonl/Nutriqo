@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { httpClient } from '@/shared/api';
 import { Button } from '@/shared/ui/Button/Button';
 
 export const SubscribeButton = () => {
@@ -8,15 +9,21 @@ export const SubscribeButton = () => {
 
   const handleSubscribe = async () => {
     setLoading(true);
-    const res = await fetch('/api/payment/checkout', { method: 'POST' });
-    const data = await res.json();
-    
-    if (data.url) {
-      window.location.href = data.url; // Редирект на Stripe
-    } else {
+    try {
+      const response = await httpClient.post('/api/payment/checkout');
+      const data = response.data as any;
+      
+      if (data.url) {
+        window.location.href = data.url; // Редирект на Stripe
+      } else {
+        alert('Ошибка оплаты');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
       alert('Ошибка оплаты');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
