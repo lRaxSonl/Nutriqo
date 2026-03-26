@@ -29,6 +29,12 @@
 
 **Nutriqo** is a modern nutrition tracking application that uses AI to analyze food photos and help users maintain a balanced diet. The app provides real-time nutritional analysis (proteins, fats, carbohydrates), goal tracking, and premium subscription features with Stripe integration.
 
+
+<img width="1919" height="882" alt="1" src="https://github.com/user-attachments/assets/218e96c8-8194-4c7b-8b5f-b1a62d94c31d" />
+
+<img width="1473" height="841" alt="Снимок экрана_20260326_204411" src="https://github.com/user-attachments/assets/2166f68e-3206-4b0f-b5e8-a3842b4613dd" />
+
+
 ### Key Highlights
 
 - 🤖 **AI Photo Analysis**: Uses OpenAI's GPT-4 Vision to analyze food photos and extract nutritional data
