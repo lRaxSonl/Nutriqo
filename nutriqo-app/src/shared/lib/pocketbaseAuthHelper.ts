@@ -212,8 +212,43 @@ export async function getSubscriptionStatusFromPB(userId: string): Promise<'acti
 
     console.warn('[PBAuthHelper] User not found in PB for ID:', userId);
     return undefined;
-  } catch (error) {
+  } catch (error: any) {
+    // Handle 404 gracefully - user not found in this PB instance
+    if (error?.status === 404) {
+      console.warn('[PBAuthHelper] User 404 in PB for ID:', userId, '- this is OK if using fallback token values');
+      return undefined;
+    }
     console.error('[PBAuthHelper] Error retrieving subscription status for ID', userId, ':', error);
+    return undefined;
+  }
+}
+
+/**
+ * Get user role from PocketBase
+ * Returns the role field ('user' or 'admin') from PocketBase user record
+ */
+export async function getUserRoleFromPB(userId: string): Promise<'user' | 'admin' | undefined> {
+  try {
+    const pocketbase = createPocketBaseClient();
+    const usersCollection = getPocketBaseUsersCollection();
+
+    const pbUser = await pocketbase.collection(usersCollection).getOne(userId);
+    
+    if (pbUser) {
+      const role = (pbUser.role || 'user') as 'user' | 'admin';
+      console.log('[PBAuthHelper] Retrieved role from PB for user ID', userId, ':', role);
+      return role;
+    }
+
+    console.warn('[PBAuthHelper] User not found in PB for ID:', userId);
+    return undefined;
+  } catch (error: any) {
+    // Handle 404 gracefully - user not found in this PB instance
+    if (error?.status === 404) {
+      console.warn('[PBAuthHelper] User 404 in PB for ID:', userId, '- this is OK if using fallback token values');
+      return undefined;
+    }
+    console.error('[PBAuthHelper] Error retrieving role for ID', userId, ':', error);
     return undefined;
   }
 }

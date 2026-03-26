@@ -13,6 +13,7 @@ declare module "next-auth/jwt" {
     sub?: string;
     id?: string;
     pbUserId?: string; // PocketBase user ID
+    role: 'user' | 'admin'; // Роль пользователя
     pbToken?: string;
     subscriptionStatus?: 'active' | 'inactive';
   }

@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { createPocketBaseClient, getPocketBaseUsersCollection } from "@/shared/lib/pocketbase";
-import { getOrCreatePocketBaseToken, generateOAuthPassword, getSubscriptionStatusFromPB } from "@/shared/lib/pocketbaseAuthHelper";
+import { getOrCreatePocketBaseToken, generateOAuthPassword, getSubscriptionStatusFromPB, getUserRoleFromPB } from "@/shared/lib/pocketbaseAuthHelper";
 import { logger } from "@/shared/lib/logger";
 
 /**
@@ -63,6 +63,7 @@ export const authOptions: NextAuthOptions = {
             name: authData.record.name || authData.record.email,
             pbUserId: authData.record.id, // PocketBase user ID
             subscriptionStatus: authData.record.subscriptionStatus || 'inactive',
+            role: authData.record.role || 'user', // User role from PocketBase
             pbToken: authData.token, // Сохраняем PocketBase token
           };
         } catch (error) {
@@ -122,6 +123,7 @@ export const authOptions: NextAuthOptions = {
                 password: oauthPassword,
                 passwordConfirm: oauthPassword,
                 name: user.name || user.email,
+                role: 'user', // Default role for new users
                 subscriptionStatus: 'inactive', // Add required field for new users
               });
               console.log('[OAuth SignIn] ✓ User created with id:', pbUser.id);
@@ -154,9 +156,11 @@ export const authOptions: NextAuthOptions = {
             (user as any).pbUserId = pbUser.id;
             (user as any).pbUserEmail = pbUser.email;
             (user as any).subscriptionStatus = pbUser.subscriptionStatus || 'inactive';
+            (user as any).role = pbUser.role || 'user'; // Сохраняем роль из PB
             console.log('[OAuth SignIn] ✓ Stored in user object:');
             console.log('[OAuth SignIn]   - pbUserId:', (user as any).pbUserId);
             console.log('[OAuth SignIn]   - subscriptionStatus:', (user as any).subscriptionStatus);
+            console.log('[OAuth SignIn]   - role:', (user as any).role);
           } else {
             console.warn('[OAuth SignIn] ✗ pbUser?.id missing - cannot store pbUserId');
           }
@@ -197,6 +201,7 @@ export const authOptions: NextAuthOptions = {
           token.pbUserId = (user as any).pbUserId;
           token.pbUserEmail = (user as any).pbUserEmail || user.email;
           token.subscriptionStatus = (user as any).subscriptionStatus || 'inactive';
+          token.role = (user as any).role || 'user';
           
           // Если pbUserId не передался из user - нужно создать/найти пользователя в PB
           if (!token.pbUserId && user.email) {
@@ -230,6 +235,7 @@ export const authOptions: NextAuthOptions = {
                     password: oauthPassword,
                     passwordConfirm: oauthPassword,
                     name: user.name || user.email,
+                    role: 'user', // Default role for new users
                     subscriptionStatus: 'inactive',
                   });
                   console.log('[JWT Callback] ✓ Created PB user with id:', pbUser.id);
@@ -243,7 +249,9 @@ export const authOptions: NextAuthOptions = {
               if (pbUser?.id) {
                 token.pbUserId = pbUser.id;
                 token.subscriptionStatus = pbUser.subscriptionStatus || 'inactive';
+                token.role = pbUser.role || 'user'; // Копируем роль из PB
                 console.log('[JWT Callback] ✓ Set pbUserId from PB:', token.pbUserId);
+                console.log('[JWT Callback] ✓ Set role from PB:', token.role);
                 
                 // Получаем token от PocketBase для этого пользователя
                 try {
@@ -328,8 +336,10 @@ export const authOptions: NextAuthOptions = {
             } else {
               token.pbUserId = pbUsers[0].id;
               token.subscriptionStatus = pbUsers[0].subscriptionStatus || 'inactive';
+              token.role = pbUsers[0].role || 'user';
               console.log('[JWT Callback] ✓ Found pbUserId from PB:', token.pbUserId);
               console.log('[JWT Callback] ✓ Found subscriptionStatus from PB:', token.subscriptionStatus);
+              console.log('[JWT Callback] ✓ Found role from PB:', token.role);
               return token;
             }
           } catch (error) {
@@ -338,9 +348,11 @@ export const authOptions: NextAuthOptions = {
         }
 
         // Если pbToken уже есть в token и pbUserId тоже - это значит пользователь уже аутентифицирован
-        // Получим свежий subscriptionStatus из PocketBase для синхронизации после activate-subscription
+        // Получим свежий subscriptionStatus и роль из PocketBase для синхронизации
         if (token.pbToken && token.pbUserId) {
-          console.log('[JWT Callback] ✓ Refreshing subscriptionStatus from PB for user ID:', token.pbUserId);
+          console.log('[JWT Callback] ✓ Refreshing subscriptionStatus and role from PB for user ID:', token.pbUserId);
+          
+          // Обновляем subscriptionStatus
           const freshSubscriptionStatus = await getSubscriptionStatusFromPB(token.pbUserId as string);
           if (freshSubscriptionStatus !== undefined) {
             // Только обновляем если статус изменился
@@ -351,8 +363,23 @@ export const authOptions: NextAuthOptions = {
               console.log('[JWT Callback] subscriptionStatus unchanged:', freshSubscriptionStatus);
             }
           } else {
-            console.log('[JWT Callback] subscriptionStatus is undefined, keeping current:', token.subscriptionStatus);
+            console.log('[JWT Callback] subscriptionStatus from PB is undefined, keeping current:', token.subscriptionStatus);
           }
+          
+          // Обновляем role
+          const freshRole = await getUserRoleFromPB(token.pbUserId as string);
+          if (freshRole !== undefined) {
+            // Всегда обновляем роль из PocketBase (может быть изменена админом)
+            if (token.role !== freshRole) {
+              token.role = freshRole;
+              console.log('[JWT Callback] ✓ Updated role from PB:', freshRole);
+            } else {
+              console.log('[JWT Callback] role unchanged:', freshRole);
+            }
+          } else {
+            console.log('[JWT Callback] role from PB is undefined, keeping current:', token.role);
+          }
+          
           return token;
         } else {
           if (!token.pbToken) console.log('[JWT Callback] No pbToken in token');
@@ -379,7 +406,15 @@ export const authOptions: NextAuthOptions = {
         console.log('[JWT Callback] Returning token');
         console.log('[JWT Callback]   - pbToken present:', !!token.pbToken);
         console.log('[JWT Callback]   - pbUserId:', token.pbUserId);
+        console.log('[JWT Callback]   - role:', token.role);
         console.log('[JWT Callback]   - subscription:', token.subscriptionStatus);
+        
+        // Ensure role is always set
+        if (!token.role) {
+          token.role = 'user';
+          console.log('[JWT Callback] ✓ Set default role to "user"');
+        }
+        
         return token;
       } catch (error) {
         console.error('[JWT Callback] Unexpected error:', error);
@@ -393,14 +428,17 @@ export const authOptions: NextAuthOptions = {
         if (session.user) {
           session.user.id = token.id as string;
           session.user.pbUserId = token.pbUserId as string;
+          session.user.role = token.role as 'user' | 'admin';
           session.user.subscriptionStatus = token.subscriptionStatus as 'active' | 'inactive';
+          
+          console.log('[Session Callback] ✓ Session updated from JWT token');
+          console.log('[Session Callback]   - pbUserId:', session.user?.pbUserId);
+          console.log('[Session Callback]   - role:', session.user?.role);
+          console.log('[Session Callback]   - subscriptionStatus:', session.user?.subscriptionStatus);
         }
         // Копируем pbToken из token в session для использования в API routes
         if (token.pbToken) {
           session.pbToken = token.pbToken as string;
-          console.log('[Session Callback] ✓ Session updated');
-          console.log('[Session Callback]   - pbUserId:', session.user?.pbUserId);
-          console.log('[Session Callback]   - subscriptionStatus:', session.user?.subscriptionStatus);
         } else {
           console.warn('[Session Callback] WARNING: No pbToken in JWT token!');
         }

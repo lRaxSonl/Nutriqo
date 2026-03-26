@@ -65,3 +65,35 @@ export const createAuthenticatedPocketBaseClient = (token: string) => {
 };
 
 export const pb = createPocketBaseClient()
+
+/**
+ * Get an admin-authenticated PocketBase client for accessing all records
+ * Uses admin email/password from environment variables
+ * Falls back to unauthenticated client if admin credentials not available
+ */
+export async function getAdminPocketBaseClient() {
+	const client = createPocketBaseClient();
+	
+	const adminEmail = process.env.POCKETBASE_ADMIN_EMAIL;
+	const adminPassword = process.env.POCKETBASE_ADMIN_PASSWORD;
+	
+	if (!adminEmail || !adminPassword) {
+		console.warn('[PocketBase Admin] Admin credentials not configured');
+		console.warn('[PocketBase Admin] Falling back to unauthenticated client');
+		return client;
+	}
+	
+	try {
+		console.log('[PocketBase Admin] Authenticating as admin with email:', adminEmail);
+		
+		// Try to authenticate as super admin account (not as user)
+		const authData = await client.admins.authWithPassword(adminEmail, adminPassword);
+		
+		console.log('[PocketBase Admin] ✓ Admin authenticated successfully');
+		return client;
+	} catch (error: any) {
+		console.error('[PocketBase Admin] Failed to authenticate as admin:', error?.message);
+		console.warn('[PocketBase Admin] Falling back to unauthenticated client (may have limited access)');
+		return client;
+	}
+}
