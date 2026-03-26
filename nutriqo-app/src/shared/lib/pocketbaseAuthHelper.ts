@@ -192,3 +192,28 @@ export async function getOrCreatePocketBaseToken(userEmail: string, pbUserId?: s
     return null;
   }
 }
+
+/**
+ * Get fresh subscription status from PocketBase for a user
+ * Used in JWT callback to always have current subscription status
+ */
+export async function getSubscriptionStatusFromPB(userId: string): Promise<'active' | 'inactive' | undefined> {
+  try {
+    const pocketbase = createPocketBaseClient();
+    const usersCollection = getPocketBaseUsersCollection();
+
+    const pbUser = await pocketbase.collection(usersCollection).getOne(userId);
+    
+    if (pbUser) {
+      const subscriptionStatus = pbUser.subscriptionStatus as 'active' | 'inactive' | undefined;
+      console.log('[PBAuthHelper] Retrieved subscriptionStatus from PB for user ID', userId, ':', subscriptionStatus);
+      return subscriptionStatus;
+    }
+
+    console.warn('[PBAuthHelper] User not found in PB for ID:', userId);
+    return undefined;
+  } catch (error) {
+    console.error('[PBAuthHelper] Error retrieving subscription status for ID', userId, ':', error);
+    return undefined;
+  }
+}

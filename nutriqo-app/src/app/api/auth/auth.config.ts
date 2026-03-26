@@ -2,7 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { createPocketBaseClient, getPocketBaseUsersCollection } from "@/shared/lib/pocketbase";
-import { getOrCreatePocketBaseToken, generateOAuthPassword } from "@/shared/lib/pocketbaseAuthHelper";
+import { getOrCreatePocketBaseToken, generateOAuthPassword, getSubscriptionStatusFromPB } from "@/shared/lib/pocketbaseAuthHelper";
 import { logger } from "@/shared/lib/logger";
 
 /**
@@ -55,13 +55,18 @@ export const authOptions: NextAuthOptions = {
             .collection(usersCollection)
             .authWithPassword(credentials.email, credentials.password);
 
+          console.log('[Credentials SignIn] ✓ User authenticated:', credentials.email, 'pbUserId:', authData.record.id);
+
           return {
             id: authData.record.id,
             email: authData.record.email,
             name: authData.record.name || authData.record.email,
+            pbUserId: authData.record.id, // PocketBase user ID
+            subscriptionStatus: authData.record.subscriptionStatus || 'inactive',
             pbToken: authData.token, // Сохраняем PocketBase token
           };
-        } catch {
+        } catch (error) {
+          console.error('[Credentials SignIn] ✗ Authentication failed:', credentials.email);
           return null;
         }
       },
@@ -75,10 +80,16 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async signIn({ user, account, profile }) {
+      console.log('\n========== [SignIn Callback] ==========');
+      console.log('[SignIn Callback] STARTED - This should always log');
+      console.log('[SignIn Callback]   - account?.type:', account?.type);
+      console.log('[SignIn Callback]   - user.email:', user.email);
+      console.log('[SignIn Callback]   - user.id:', user.id);
+      
       // Обработка OAuth авторизации (Google и т.д.)
       if (account && user.email) {
+        console.log('[OAuth SignIn] Processing OAuth user:', user.email);
         try {
-          console.log('[OAuth SignIn] Processing OAuth user:', user.email);
           const pocketbase = createPocketBaseClient();
           const usersCollection = getPocketBaseUsersCollection();
           const oauthPassword = generateOAuthPassword(user.email);
@@ -86,22 +97,26 @@ export const authOptions: NextAuthOptions = {
           // Ищем пользователя в PocketBase
           let pbUser;
           try {
+            console.log('[OAuth SignIn] Searching PB for email:', user.email);
             const users = await pocketbase.collection(usersCollection).getFullList({
               filter: `email="${user.email}"`,
               limit: 1,
             });
             pbUser = users[0];
             if (pbUser) {
-              console.log('[OAuth SignIn] Found existing PB user:', user.email);
+              console.log('[OAuth SignIn] ✓ Found existing PB user:', user.email, 'id:', pbUser.id);
+            } else {
+              console.log('[OAuth SignIn] User not found in PB, will create');
             }
           } catch (findError) {
-            console.log('[OAuth SignIn] User not found, creating:', user.email);
+            console.log('[OAuth SignIn] Search error (expected if not found), will create:', findError);
             pbUser = null;
           }
 
           // Если не найден, создаём нового
           if (!pbUser) {
             try {
+              console.log('[OAuth SignIn] Creating new PB user for:', user.email);
               pbUser = await pocketbase.collection(usersCollection).create({
                 email: user.email,
                 password: oauthPassword,
@@ -109,7 +124,7 @@ export const authOptions: NextAuthOptions = {
                 name: user.name || user.email,
                 subscriptionStatus: 'inactive', // Add required field for new users
               });
-              console.log('[OAuth SignIn] ✓ User created:', user.email);
+              console.log('[OAuth SignIn] ✓ User created with id:', pbUser.id);
               logger.info('OAuth user created: ' + user.email);
             } catch (createErr) {
               console.error('[OAuth SignIn] ✗ Failed to create user:', createErr);
@@ -117,7 +132,7 @@ export const authOptions: NextAuthOptions = {
               // If creation failed (e.g., email already exists), try to find existing user
               const errorMsg = (createErr as any)?.message || '';
               if (errorMsg.includes('validation_not_unique') || errorMsg.includes('unique')) {
-                console.log('[OAuth SignIn] Email might already exist, trying to find user...');
+                console.log('[OAuth SignIn] Email already exists, searching for existing...');
                 try {
                   const users = await pocketbase.collection(usersCollection).getFullList({
                     filter: `email="${user.email}"`,
@@ -125,7 +140,7 @@ export const authOptions: NextAuthOptions = {
                   });
                   if (users.length > 0) {
                     pbUser = users[0];
-                    console.log('[OAuth SignIn] ✓ Found existing user after creation error:', user.email, 'ID:', pbUser.id);
+                    console.log('[OAuth SignIn] ✓ Found existing user:', pbUser.id);
                   }
                 } catch (findErr) {
                   console.error('[OAuth SignIn] Failed to find existing user:', findErr);
@@ -134,41 +149,214 @@ export const authOptions: NextAuthOptions = {
             }
           }
 
-          // Сохраняем pbUserId для использования в jwt callback
+          // Сохраняем pbUserId и subscriptionStatus для использования в jwt callback
           if (pbUser?.id) {
             (user as any).pbUserId = pbUser.id;
             (user as any).pbUserEmail = pbUser.email;
-            console.log('[OAuth SignIn] Stored pbUserId:', pbUser.id);
+            (user as any).subscriptionStatus = pbUser.subscriptionStatus || 'inactive';
+            console.log('[OAuth SignIn] ✓ Stored in user object:');
+            console.log('[OAuth SignIn]   - pbUserId:', (user as any).pbUserId);
+            console.log('[OAuth SignIn]   - subscriptionStatus:', (user as any).subscriptionStatus);
+          } else {
+            console.warn('[OAuth SignIn] ✗ pbUser?.id missing - cannot store pbUserId');
           }
         } catch (error) {
           console.error('[OAuth SignIn] Unexpected error:', error);
           // Continue anyway to not block the login
         }
+      } else if (!account) {
+        console.log('[SignIn] Not OAuth (account is null) - likely Credentials provider');
+      } else if (!user.email) {
+        console.log('[SignIn] No user.email');
       }
 
+      console.log('[SignIn Callback] ✓ Returning true');
+      console.log('[SignIn Callback]   - user.pbUserId after:', (user as any).pbUserId);
+      console.log('========== [SignIn Callback END] ==========\n');
       return true;
     },
 
     async jwt({ token, user, account }) {
       try {
-        // При первом логине - копируем ID из user объекта
+        console.log('\n========== [JWT Callback START] ==========');
+        console.log('[JWT Callback] Params received:');
+        console.log('[JWT Callback]   - user:', user ? 'EXISTS' : 'NULL');
+        console.log('[JWT Callback]   - account:', account ? 'EXISTS' : 'NULL');
+        console.log('[JWT Callback]   - token.email:', token.email);
+        console.log('[JWT Callback]   - token.pbUserId:', token.pbUserId);
+        
+        // При первом логине - копируем ID и данные из user объекта
         if (user) {
+          console.log('[JWT Callback] ✓ User object received (first login or signIn callback)');
+          console.log('[JWT Callback]   - user.id:', user.id);
+          console.log('[JWT Callback]   - user.email:', user.email);
+          console.log('[JWT Callback]   - user.pbUserId:', (user as any).pbUserId);
+          console.log('[JWT Callback]   - user.subscriptionStatus:', (user as any).subscriptionStatus);
+          
           token.id = user.id;
           token.pbUserId = (user as any).pbUserId;
           token.pbUserEmail = (user as any).pbUserEmail || user.email;
-          console.log('[JWT Callback] First login for:', token.email, 'pbUserId:', token.pbUserId);
+          token.subscriptionStatus = (user as any).subscriptionStatus || 'inactive';
+          
+          // Если pbUserId не передался из user - нужно создать/найти пользователя в PB
+          if (!token.pbUserId && user.email) {
+            console.log('[JWT Callback] pbUserId missing, attempting to create/find user in PB for:', user.email);
+            try {
+              const pocketbase = createPocketBaseClient();
+              const usersCollection = getPocketBaseUsersCollection();
+              const oauthPassword = generateOAuthPassword(user.email);
+
+              // Сначала пытаемся найти пользователя в PB
+              let pbUser;
+              try {
+                const users = await pocketbase.collection(usersCollection).getFullList({
+                  filter: `email="${user.email}"`,
+                  limit: 1,
+                });
+                pbUser = users[0];
+                if (pbUser) {
+                  console.log('[JWT Callback] ✓ Found existing PB user:', user.email, 'id:', pbUser.id);
+                }
+              } catch (findErr) {
+                console.log('[JWT Callback] User not found in PB, will create');
+              }
+
+              // Если не найден - создаём нового
+              if (!pbUser) {
+                try {
+                  console.log('[JWT Callback] Creating new user in PB for:', user.email);
+                  pbUser = await pocketbase.collection(usersCollection).create({
+                    email: user.email,
+                    password: oauthPassword,
+                    passwordConfirm: oauthPassword,
+                    name: user.name || user.email,
+                    subscriptionStatus: 'inactive',
+                  });
+                  console.log('[JWT Callback] ✓ Created PB user with id:', pbUser.id);
+                } catch (createErr) {
+                  console.error('[JWT Callback] Failed to create PB user:', createErr);
+                  // Continue anyway
+                }
+              }
+
+              // Если успешно нашли/создали пользователя - копируем данные
+              if (pbUser?.id) {
+                token.pbUserId = pbUser.id;
+                token.subscriptionStatus = pbUser.subscriptionStatus || 'inactive';
+                console.log('[JWT Callback] ✓ Set pbUserId from PB:', token.pbUserId);
+                
+                // Получаем token от PocketBase для этого пользователя
+                try {
+                  const authData = await pocketbase
+                    .collection(usersCollection)
+                    .authWithPassword(user.email, oauthPassword);
+                  if (authData?.token) {
+                    token.pbToken = authData.token;
+                    console.log('[JWT Callback] ✓ Got pbToken for new user');
+                  }
+                } catch (authErr) {
+                  console.error('[JWT Callback] Failed to get pbToken:', authErr);
+                }
+              }
+            } catch (error) {
+              console.error('[JWT Callback] Unexpected error creating/finding user:', error);
+            }
+          }
+          
+          console.log('[JWT Callback] ✓ First login for:', token.email);
+          console.log('[JWT Callback]   - Copied to token - id:', token.id);
+          console.log('[JWT Callback]   - Copied to token - pbUserId:', token.pbUserId);
+          console.log('[JWT Callback]   - Copied to token - subscriptionStatus:', token.subscriptionStatus);
           
           // Если уже есть pbToken (из signIn) - используем его
           if ((user as any).pbToken) {
             token.pbToken = (user as any).pbToken;
-            console.log('[JWT Callback] Using pbToken from signIn callback');
+            console.log('[JWT Callback] ✓ Using pbToken from signIn callback');
+            return token;
+          }
+          
+          // Если есть pbUserId и pbToken - готовы возвращать
+          if (token.pbUserId && token.pbToken) {
             return token;
           }
         }
 
-        // Если pbToken уже есть в token - возвращаем сразу
-        if (token.pbToken) {
+        // Если pbToken уже есть в token - это значит пользователь уже аутентифицирован
+        // Но pbUserId может быть missing - получим его из PocketBase по email если нужно
+        if (token.pbToken && token.email && !token.pbUserId) {
+          console.log('[JWT Callback] ⚠️ pbToken exists but pbUserId missing for:', token.email);
+          console.log('[JWT Callback] Attempting to retrieve pbUserId from PB by email...');
+          try {
+            const pocketbase = createPocketBaseClient();
+            const usersCollection = getPocketBaseUsersCollection();
+            
+            // Try lowercase email first
+            console.log('[JWT Callback] Searching PB with filter: email="' + token.email + '"');
+            let pbUsers = await pocketbase.collection(usersCollection).getFullList({
+              filter: `email="${token.email}"`,
+              limit: 1,
+            });
+            
+            // If not found, try case-insensitive search
+            if (pbUsers.length === 0) {
+              console.log('[JWT Callback] Not found with exact email, trying lowercase...');
+              const lowerEmail = token.email.toLowerCase();
+              pbUsers = await pocketbase.collection(usersCollection).getFullList({
+                filter: `email="${lowerEmail}"`,
+                limit: 1,
+              });
+            }
+            
+            // If still not found, try to get all users and log them for debugging
+            if (pbUsers.length === 0) {
+              console.log('[JWT Callback] ⚠️ User not found in PB by email:', token.email);
+              console.log('[JWT Callback] Attempting to list all users for debugging...');
+              try {
+                const allUsers = await pocketbase.collection(usersCollection).getFullList({
+                  limit: 100,
+                });
+                console.log('[JWT Callback] Total users in PB:', allUsers.length);
+                if (allUsers.length > 0) {
+                  console.log('[JWT Callback] Sample users (first 5 emails):');
+                  allUsers.slice(0, 5).forEach((u: any) => {
+                    console.log('[JWT Callback]   -', u.email, '(id:', u.id + ')');
+                  });
+                }
+              } catch (listErr) {
+                console.error('[JWT Callback] Failed to list all users:', listErr);
+              }
+            } else {
+              token.pbUserId = pbUsers[0].id;
+              token.subscriptionStatus = pbUsers[0].subscriptionStatus || 'inactive';
+              console.log('[JWT Callback] ✓ Found pbUserId from PB:', token.pbUserId);
+              console.log('[JWT Callback] ✓ Found subscriptionStatus from PB:', token.subscriptionStatus);
+              return token;
+            }
+          } catch (error) {
+            console.error('[JWT Callback] Error retrieving pbUserId from PB:', error);
+          }
+        }
+
+        // Если pbToken уже есть в token и pbUserId тоже - это значит пользователь уже аутентифицирован
+        // Получим свежий subscriptionStatus из PocketBase для синхронизации после activate-subscription
+        if (token.pbToken && token.pbUserId) {
+          console.log('[JWT Callback] ✓ Refreshing subscriptionStatus from PB for user ID:', token.pbUserId);
+          const freshSubscriptionStatus = await getSubscriptionStatusFromPB(token.pbUserId as string);
+          if (freshSubscriptionStatus !== undefined) {
+            // Только обновляем если статус изменился
+            if (token.subscriptionStatus !== freshSubscriptionStatus) {
+              token.subscriptionStatus = freshSubscriptionStatus;
+              console.log('[JWT Callback] ✓ Updated subscriptionStatus from PB:', freshSubscriptionStatus);
+            } else {
+              console.log('[JWT Callback] subscriptionStatus unchanged:', freshSubscriptionStatus);
+            }
+          } else {
+            console.log('[JWT Callback] subscriptionStatus is undefined, keeping current:', token.subscriptionStatus);
+          }
           return token;
+        } else {
+          if (!token.pbToken) console.log('[JWT Callback] No pbToken in token');
+          if (!token.pbUserId) console.log('[JWT Callback] No pbUserId in token');
         }
 
         // OAuth users: используем helper для получения token
@@ -188,7 +376,10 @@ export const authOptions: NextAuthOptions = {
           }
         }
 
-        console.log('[JWT Callback] Returning token - pbToken present:', !!token.pbToken);
+        console.log('[JWT Callback] Returning token');
+        console.log('[JWT Callback]   - pbToken present:', !!token.pbToken);
+        console.log('[JWT Callback]   - pbUserId:', token.pbUserId);
+        console.log('[JWT Callback]   - subscription:', token.subscriptionStatus);
         return token;
       } catch (error) {
         console.error('[JWT Callback] Unexpected error:', error);
@@ -201,11 +392,15 @@ export const authOptions: NextAuthOptions = {
       try {
         if (session.user) {
           session.user.id = token.id as string;
+          session.user.pbUserId = token.pbUserId as string;
+          session.user.subscriptionStatus = token.subscriptionStatus as 'active' | 'inactive';
         }
         // Копируем pbToken из token в session для использования в API routes
         if (token.pbToken) {
           session.pbToken = token.pbToken as string;
-          console.log('[Session Callback] pbToken copied to session');
+          console.log('[Session Callback] ✓ Session updated');
+          console.log('[Session Callback]   - pbUserId:', session.user?.pbUserId);
+          console.log('[Session Callback]   - subscriptionStatus:', session.user?.subscriptionStatus);
         } else {
           console.warn('[Session Callback] WARNING: No pbToken in JWT token!');
         }

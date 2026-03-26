@@ -12,6 +12,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     sub?: string;
     id?: string;
+    pbUserId?: string; // PocketBase user ID
     pbToken?: string;
     subscriptionStatus?: 'active' | 'inactive';
   }

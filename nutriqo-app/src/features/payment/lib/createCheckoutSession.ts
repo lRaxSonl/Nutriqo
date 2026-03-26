@@ -10,7 +10,7 @@ export async function createCheckoutSession(userId: string, email: string) {
         price_data: {
           currency: 'usd',
           product_data: { name: 'NutriQo Premium' },
-          unit_amount: 999,
+          unit_amount: 499, // $4.99/month
           recurring: {
             interval: 'month',
           },

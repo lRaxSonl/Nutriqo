@@ -4,3 +4,4 @@ export { HttpClientError } from './http-client/types';
 export { authApi } from './auth';
 export type { RegisterRequest, RegisterResponse } from './auth';
 export { useHttp } from './hooks/useHttp';
+export { useSubscription } from './hooks/useSubscription';

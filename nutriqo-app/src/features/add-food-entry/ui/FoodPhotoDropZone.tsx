@@ -12,16 +12,21 @@ interface FoodPhotoDropZoneProps {
   onImageSelect: (base64: string) => void;
   disabled?: boolean;
   isLoading?: boolean;
+  error?: string | null;
 }
 
 export function FoodPhotoDropZone({
   onImageSelect,
   disabled = false,
   isLoading = false,
+  error: externalError = null,
 }: FoodPhotoDropZoneProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Показываем внешнюю ошибку если есть
+  const displayError = externalError || error;
 
   const convertToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -141,10 +146,10 @@ export function FoodPhotoDropZone({
         )}
       </div>
 
-      {error && (
+      {displayError && (
         <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
           <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" />
-          <span className="text-sm text-red-700 dark:text-red-300">{error}</span>
+          <span className="text-sm text-red-700 dark:text-red-300">{displayError}</span>
         </div>
       )}
     </div>

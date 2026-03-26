@@ -163,6 +163,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Проверяем подписку - функция photo analysis требует Premium
+    if (session.user.subscriptionStatus !== 'active') {
+      logger.warn(`Photo analysis requested by non-premium user: ${session.user.email}`);
+      return Response.json(
+        {
+          success: false,
+          error: 'Premium subscription required for photo analysis',
+          code: 'SUBSCRIPTION_REQUIRED',
+        },
+        { status: 403 }
+      );
+    }
+
     // Парсим тело запроса
     const body: AnalyzePhotoRequest = await request.json();
 

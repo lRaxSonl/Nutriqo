@@ -3,5 +3,6 @@ export interface User {
   name: string | null;
   email: string | null;
   image?: string | null;
+  pbUserId?: string; // PocketBase user ID
   subscriptionStatus?: 'active' | 'inactive';
 }
