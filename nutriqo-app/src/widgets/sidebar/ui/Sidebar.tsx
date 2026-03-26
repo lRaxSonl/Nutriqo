@@ -17,6 +17,11 @@ export const Sidebar = () => {
     { href: '/profile', label: '👤 Профиль', icon: '👤' },
   ];
 
+  // Скрываем Sidebar если пользователь не авторизован
+  if (!session?.user) {
+    return null;
+  }
+
   return (
     <aside className="w-64 bg-background border-r border-border min-h-screen p-4 flex flex-col">
       {/* Logo/Title */}

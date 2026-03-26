@@ -1,26 +1,28 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { httpClient } from '@/shared/api';
 import { Card } from '@/shared/ui/Card/Card';
 import { Button } from '@/shared/ui/Button/Button';
 import { logger } from '@/shared/lib/logger';
+import {
+  calculateStatistics,
+  calculateMacroPercentages,
+  calculateCompletionRate,
+} from '@/features/statistics-calculation/model';
+import { StatisticsData } from '@/entities/statistics/model';
 
-interface StatisticData {
-  totalGoals: number;
-  finishedGoals: number;
-  unfinishedGoals: number;
-  avgCalories: number;
-  avgProtein: number;
-  avgFats: number;
-  avgCarbs: number;
-  lastUpdated: string;
+interface StatisticPageState {
+  stats: StatisticsData | null;
+  isLoading: boolean;
+  error: string | null;
 }
 
 export default function StatisticsPage() {
   const { data: session } = useSession();
-  const [stats, setStats] = useState<StatisticData | null>(null);
+  const [stats, setStats] = useState<StatisticsData | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,47 +43,11 @@ export default function StatisticsPage() {
 
         const goals = response.data as any[];
 
-        // Если нет целей, показываем пустую статистику
-        if (!goals || goals.length === 0) {
-          setStats({
-            totalGoals: 0,
-            finishedGoals: 0,
-            unfinishedGoals: 0,
-            avgCalories: 0,
-            avgProtein: 0,
-            avgFats: 0,
-            avgCarbs: 0,
-            lastUpdated: new Date().toLocaleString('ru-RU'),
-          });
-          return;
-        }
+        // Use pure function to calculate statistics
+        const calculatedStats = calculateStatistics(goals || []);
 
-        // Подсчитываем статистику
-        const totalGoals = goals.length;
-        const finishedGoals = goals.filter((g: any) => g.is_finished === true).length;
-        const unfinishedGoals = totalGoals - finishedGoals;
-
-        // Рассчитываем средние значения по ВСЕМ целям (finished и unfinished)
-        const totalCalories = goals.reduce((sum: number, g: any) => sum + (Number(g.calories_goal) || 0), 0);
-        const totalProtein = goals.reduce((sum: number, g: any) => sum + (Number(g.protein_goal) || 0), 0);
-        const totalFats = goals.reduce((sum: number, g: any) => sum + (Number(g.fats_goal) || 0), 0);
-        const totalCarbs = goals.reduce((sum: number, g: any) => sum + (Number(g.carbs_goal) || 0), 0);
-
-        const avgCalories = totalGoals > 0 ? Math.round(totalCalories / totalGoals) : 0;
-        const avgProtein = totalGoals > 0 ? Math.round(totalProtein / totalGoals) : 0;
-        const avgFats = totalGoals > 0 ? Math.round(totalFats / totalGoals) : 0;
-        const avgCarbs = totalGoals > 0 ? Math.round(totalCarbs / totalGoals) : 0;
-
-        setStats({
-          totalGoals,
-          finishedGoals,
-          unfinishedGoals,
-          avgCalories,
-          avgProtein,
-          avgFats,
-          avgCarbs,
-          lastUpdated: new Date().toLocaleString('ru-RU'),
-        });
+        setStats(calculatedStats);
+        setLastUpdated(new Date().toLocaleString('ru-RU'));
 
         logger.info('Statistics loaded successfully');
       } catch (err) {
@@ -130,7 +96,7 @@ export default function StatisticsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">📊 Статистика</h1>
-        <p className="text-foreground-secondary">Обновлено: {stats.lastUpdated}</p>
+        <p className="text-foreground-secondary">Обновлено: {lastUpdated || 'Загрузка...'}</p>
       </div>
 
       {/* Overview Cards */}
@@ -152,7 +118,7 @@ export default function StatisticsPage() {
 
         <Card className="p-4 text-center">
           <div className="text-3xl font-bold text-primary">
-            {stats.totalGoals > 0 ? Math.round((stats.finishedGoals / stats.totalGoals) * 100) : 0}%
+            {calculateCompletionRate(stats.totalGoals, stats.finishedGoals)}%
           </div>
           <p className="text-sm text-foreground-secondary">Завершения</p>
         </Card>
@@ -190,41 +156,49 @@ export default function StatisticsPage() {
           </div>
         </div>
 
-        {/* БЖУ Soотношение */}
-        {stats.avgCalories > 0 && (
-          <div className="mt-6 p-4 bg-background/50 rounded-lg border border-border">
-            <p className="text-sm text-foreground-secondary mb-3">Соотношение БЖУ</p>
-            <div className="flex gap-1 h-8 rounded-lg overflow-hidden">
-              <div
-                className="bg-blue-500 flex items-center justify-center text-xs font-bold text-white"
-                style={{
-                  width: `${((stats.avgProtein * 4) / stats.avgCalories) * 100}%`,
-                  minWidth: '40px',
-                }}
-              >
-                Б {((stats.avgProtein * 4) / stats.avgCalories * 100).toFixed(0)}%
-              </div>
-              <div
-                className="bg-yellow-500 flex items-center justify-center text-xs font-bold text-white"
-                style={{
-                  width: `${((stats.avgFats * 9) / stats.avgCalories) * 100}%`,
-                  minWidth: '40px',
-                }}
-              >
-                Ж {((stats.avgFats * 9) / stats.avgCalories * 100).toFixed(0)}%
-              </div>
-              <div
-                className="bg-orange-500 flex items-center justify-center text-xs font-bold text-white"
-                style={{
-                  width: `${((stats.avgCarbs * 4) / stats.avgCalories) * 100}%`,
-                  minWidth: '40px',
-                }}
-              >
-                У {((stats.avgCarbs * 4) / stats.avgCalories * 100).toFixed(0)}%
+        {/* БЖУ Соотношение */}
+        {stats.avgCalories > 0 && (() => {
+          const macros = calculateMacroPercentages(
+            stats.avgCalories,
+            stats.avgProtein,
+            stats.avgFats,
+            stats.avgCarbs
+          );
+          return (
+            <div className="mt-6 p-4 bg-background/50 rounded-lg border border-border">
+              <p className="text-sm text-foreground-secondary mb-3">Соотношение БЖУ</p>
+              <div className="flex gap-1 h-8 rounded-lg overflow-hidden">
+                <div
+                  className="bg-blue-500 flex items-center justify-center text-xs font-bold text-white"
+                  style={{
+                    width: `${macros.proteinPercent}%`,
+                    minWidth: '40px',
+                  }}
+                >
+                  Б {macros.proteinPercent}%
+                </div>
+                <div
+                  className="bg-yellow-500 flex items-center justify-center text-xs font-bold text-white"
+                  style={{
+                    width: `${macros.fatsPercent}%`,
+                    minWidth: '40px',
+                  }}
+                >
+                  Ж {macros.fatsPercent}%
+                </div>
+                <div
+                  className="bg-orange-500 flex items-center justify-center text-xs font-bold text-white"
+                  style={{
+                    width: `${macros.carbsPercent}%`,
+                    minWidth: '40px',
+                  }}
+                >
+                  У {macros.carbsPercent}%
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </Card>
 
       {/* Info */}

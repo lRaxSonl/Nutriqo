@@ -116,13 +116,20 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
     setIsLoading(true);
 
     try {
-      // Вызываем API endpoint для сохранения в БД
-      const response = await httpClient.post('/api/goal/set-daily', {
+      const goalData = {
         calories_goal: calValue,
         ...(proteinValue > 0 && { protein_goal: proteinValue }),
         ...(fatsValue > 0 && { fats_goal: fatsValue }),
         ...(carbsValue > 0 && { carbs_goal: carbsValue }),
-      });
+      };
+      
+      // Выбираем эндпоинт в зависимости от того, создаём или обновляем цель
+      const isUpdating = !!initialGoal;
+      const endpoint = isUpdating ? '/api/goal/update-daily' : '/api/goal/set-daily';
+      
+      const response = isUpdating 
+        ? await httpClient.patch(endpoint, goalData)
+        : await httpClient.post(endpoint, goalData);
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -130,19 +137,27 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
           return;
         }
         const errorMessage = extractResponseError(response.data);
+        
         if (response.status === 403 && errorMessage?.includes('PocketBase permissions error')) {
           throw new Error('PocketBase запрещает создание goals для обычного пользователя. Исправь Create rule в коллекции goals.');
         }
+        
         if (response.status === 409) {
+          // 409 - конфликт: существует активная цель, нельзя создать новую
           throw new Error(errorMessage || 'У вас есть незавершённая цель. Завершите её перед созданием новой.');
         }
+        
+        if (response.status === 404) {
+          // 404 - при обновлении: не найдена активная цель
+          throw new Error(errorMessage || 'Активная цель не найдена. Создайте новую цель.');
+        }
+        
         throw new Error(errorMessage || 'Ошибка при сохранении цели');
       }
 
       const goalId = extractGoalId(response.data);
-      
-      // Используем ответ от API для БЖУ (они могут быть рассчитаны на сервере)
       const responseData = response.data as any;
+      
       const goal: DailyGoal = {
         calories: responseData.calories_goal || calValue,
         protein: responseData.protein_goal || proteinValue,

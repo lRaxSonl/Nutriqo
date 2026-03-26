@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth.config';
 import { Goal } from '@/shared/lib/models/Goal';
+import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
 
 /**
  * GET /api/goal/get-daily
@@ -12,29 +13,20 @@ export async function GET(request: NextRequest) {
     // Получаем сессию пользователя
     const session = await getServerSession(authOptions);
     
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Please log in' },
-        { status: 401 }
-      );
-    }
-
-    const pbToken = session.pbToken;
-    if (!pbToken) {
-      return NextResponse.json(
-        { error: 'Session expired. Please sign in again.' },
-        { status: 401 }
-      );
+    // Обеспечиваем наличие pbToken
+    const { pbToken, errorResponse } = await ensurePBToken(session);
+    if (errorResponse) {
+      return errorResponse;
     }
 
     // Получаем активную (не завершённую) цель пользователя
-    const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
+    const authenticatedGoalModel = new Goal().withAuthToken(pbToken!);
 
     let goal;
     try {
-      goal = await authenticatedGoalModel.getActiveGoal(session.user.id);
+      goal = await authenticatedGoalModel.getActiveGoal(session!.user.id);
     } catch (fetchError) {
-      console.error('Error fetching active goal:', fetchError);
+      console.error('[GET /api/goal/get-daily] Error fetching active goal:', fetchError);
       throw fetchError;
     }
 
@@ -47,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(goal, { status: 200 });
   } catch (error) {
-    console.error('Error in GET /api/goal/get-daily:', error);
+    console.error('[GET /api/goal/get-daily] Error:', error);
     
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     

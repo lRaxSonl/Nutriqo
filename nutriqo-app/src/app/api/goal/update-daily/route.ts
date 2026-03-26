@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/auth.config';
-import { setDailyGoal } from '@/features/set-daily-goals/api/setDailyGoal';
 import { Goal } from '@/shared/lib/models/Goal';
 import { logger } from '@/shared/lib/logger';
 import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
 
 /**
- * POST /api/goal/set-daily
- * Установить ежедневную цель
+ * PATCH /api/goal/update-daily
+ * Обновить существующую активную цель (без проверки на наличие других активных целей)
+ * 
+ * Отличие от POST /api/goal/set-daily:
+ * - set-daily: проверяет наличие незавершённых целей, создаёт новую если нет
+ * - update-daily: просто обновляет существующую активную цель
  */
-export async function POST(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
   try {
     // Получаем сессию пользователя
     const session = await getServerSession(authOptions);
@@ -70,36 +73,39 @@ export async function POST(request: NextRequest) {
     // Create authenticated Goal model instance with user's PocketBase token
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken!);
 
-    // Проверяем есть ли активные (не завершённые) цели
-    const unfinishedGoals = await authenticatedGoalModel.getUnfinishedGoals(session!.user.id);
+    // Получаем активную цель пользователя
+    const activeGoal = await authenticatedGoalModel.getActiveGoal(session!.user.id);
     
-    if (unfinishedGoals.length > 0) {
-      // Есть незавршённые цели - нельзя создать новую
+    if (!activeGoal) {
+      // Нет активной цели - нельзя обновить
       return NextResponse.json(
         { 
-          error: 'У вас есть незавершённая цель за предыдущий день. Завершите её перед созданием новой.',
-          hasUnfinishedGoal: true,
+          error: 'No active goal found. Create a new goal using POST /api/goal/set-daily',
+          errorCode: 'NO_ACTIVE_GOAL',
         },
-        { status: 409 }
+        { status: 404 }
       );
     }
 
-    // Call API function to save goal (upsert if goal already exists for user)
-    const goal = await setDailyGoal(
-      {
-        user_id: session!.user.id,
-        calories_goal: caloriesGoal,
-        protein_goal: protein_goal ? Number(protein_goal) : undefined,
-        fats_goal: fats_goal ? Number(fats_goal) : undefined,
-        carbs_goal: carbs_goal ? Number(carbs_goal) : undefined,
-      },
-      authenticatedGoalModel
-    );
+    // Обновляем существующую активную цель
+    const updateData = {
+      calories_goal: caloriesGoal,
+      ...(protein_goal !== undefined && { protein_goal: Number(protein_goal) }),
+      ...(fats_goal !== undefined && { fats_goal: Number(fats_goal) }),
+      ...(carbs_goal !== undefined && { carbs_goal: Number(carbs_goal) }),
+    };
 
-    return NextResponse.json(goal, { status: 201 });
+    const updatedGoal = await authenticatedGoalModel.update(activeGoal.id, updateData);
+
+    logger.error(`Goal updated successfully`, 'GOAL_UPDATE_SUCCESS', { 
+      goalId: activeGoal.id,
+      userId: session!.user.id,
+    });
+
+    return NextResponse.json(updatedGoal, { status: 200 });
   } catch (error) {
     // Безопасное логирование без раскрытия деталей
-    logger.error('Failed to set daily goal', 'GOAL_SET_ERROR', {
+    logger.error('Failed to update daily goal', 'GOAL_UPDATE_ERROR', {
       errorMessage: error instanceof Error ? error.message : 'Unknown',
     });
 
@@ -120,4 +126,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { createPocketBaseClient, getPocketBaseUsersCollection } from "@/shared/lib/pocketbase";
+import { getOrCreatePocketBaseToken, generateOAuthPassword } from "@/shared/lib/pocketbaseAuthHelper";
 import { logger } from "@/shared/lib/logger";
 
 /**
@@ -73,25 +74,128 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user }) {
-      // При первом логине, сохраняем данные пользователя в token
-      if (user) {
-        token.id = user.id;
-        token.pbToken = (user as any).pbToken;
+    async signIn({ user, account, profile }) {
+      // Обработка OAuth авторизации (Google и т.д.)
+      if (account && user.email) {
+        try {
+          console.log('[OAuth SignIn] Processing OAuth user:', user.email);
+          const pocketbase = createPocketBaseClient();
+          const usersCollection = getPocketBaseUsersCollection();
+          const oauthPassword = generateOAuthPassword(user.email);
+
+          // Ищем пользователя в PocketBase
+          let pbUser;
+          try {
+            const users = await pocketbase.collection(usersCollection).getFullList({
+              filter: `email="${user.email}"`,
+              limit: 1,
+            });
+            pbUser = users[0];
+            if (pbUser) {
+              console.log('[OAuth SignIn] Found existing PB user:', user.email);
+            }
+          } catch (findError) {
+            console.log('[OAuth SignIn] User not found, creating:', user.email);
+            pbUser = null;
+          }
+
+          // Если не найден, создаём нового
+          if (!pbUser) {
+            try {
+              pbUser = await pocketbase.collection(usersCollection).create({
+                email: user.email,
+                password: oauthPassword,
+                passwordConfirm: oauthPassword,
+                name: user.name || user.email,
+              });
+              console.log('[OAuth SignIn] ✓ User created:', user.email);
+              logger.info('OAuth user created: ' + user.email);
+            } catch (createErr) {
+              console.error('[OAuth SignIn] ✗ Failed to create user:', createErr);
+              // Continue anyway - will try to get token in jwt callback
+            }
+          }
+
+          // Сохраняем pbUserId для использования в jwt callback
+          if (pbUser?.id) {
+            (user as any).pbUserId = pbUser.id;
+            (user as any).pbUserEmail = pbUser.email;
+            console.log('[OAuth SignIn] Stored pbUserId:', pbUser.id);
+          }
+        } catch (error) {
+          console.error('[OAuth SignIn] Unexpected error:', error);
+          // Continue anyway to not block the login
+        }
       }
-      // pbToken сохраняется в token на протяжении всей жизни JWT
-      return token;
+
+      return true;
+    },
+
+    async jwt({ token, user, account }) {
+      try {
+        // При первом логине - копируем ID из user объекта
+        if (user) {
+          token.id = user.id;
+          token.pbUserId = (user as any).pbUserId;
+          token.pbUserEmail = (user as any).pbUserEmail || user.email;
+          console.log('[JWT Callback] First login for:', token.email, 'pbUserId:', token.pbUserId);
+          
+          // Если уже есть pbToken (из signIn) - используем его
+          if ((user as any).pbToken) {
+            token.pbToken = (user as any).pbToken;
+            console.log('[JWT Callback] Using pbToken from signIn callback');
+            return token;
+          }
+        }
+
+        // Если pbToken уже есть в token - возвращаем сразу
+        if (token.pbToken) {
+          return token;
+        }
+
+        // OAuth users: используем helper для получения token
+        if (account?.type === 'oauth' && token.email) {
+          console.log('[JWT Callback] OAuth user detected, getting PB token for:', token.email);
+          try {
+            const pbToken = await getOrCreatePocketBaseToken(token.email as string, token.pbUserId as string);
+            if (pbToken) {
+              token.pbToken = pbToken;
+              console.log('[JWT Callback] ✓ Got PB token for OAuth user');
+            } else {
+              console.warn('[JWT Callback] ✗ Failed to get PB token for OAuth user');
+            }
+          } catch (err) {
+            console.error('[JWT Callback] Error getting PB token:', err);
+            // Continue without token - will be fetched on demand in API routes
+          }
+        }
+
+        console.log('[JWT Callback] Returning token - pbToken present:', !!token.pbToken);
+        return token;
+      } catch (error) {
+        console.error('[JWT Callback] Unexpected error:', error);
+        // Return token anyway to not block the jwt process
+        return token;
+      }
     },
 
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
+      try {
+        if (session.user) {
+          session.user.id = token.id as string;
+        }
+        // Копируем pbToken из token в session для использования в API routes
+        if (token.pbToken) {
+          session.pbToken = token.pbToken as string;
+          console.log('[Session Callback] pbToken copied to session');
+        } else {
+          console.warn('[Session Callback] WARNING: No pbToken in JWT token!');
+        }
+        return session;
+      } catch (error) {
+        console.error('[Session Callback] Error:', error);
+        return session;
       }
-      // Копируем pbToken из token в session для использования в API routes
-      if (token.pbToken) {
-        session.pbToken = token.pbToken as string;
-      }
-      return session;
     },
   },
 
