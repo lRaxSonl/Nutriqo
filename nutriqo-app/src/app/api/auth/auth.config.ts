@@ -107,12 +107,30 @@ export const authOptions: NextAuthOptions = {
                 password: oauthPassword,
                 passwordConfirm: oauthPassword,
                 name: user.name || user.email,
+                subscriptionStatus: 'inactive', // Add required field for new users
               });
               console.log('[OAuth SignIn] ✓ User created:', user.email);
               logger.info('OAuth user created: ' + user.email);
             } catch (createErr) {
               console.error('[OAuth SignIn] ✗ Failed to create user:', createErr);
-              // Continue anyway - will try to get token in jwt callback
+              
+              // If creation failed (e.g., email already exists), try to find existing user
+              const errorMsg = (createErr as any)?.message || '';
+              if (errorMsg.includes('validation_not_unique') || errorMsg.includes('unique')) {
+                console.log('[OAuth SignIn] Email might already exist, trying to find user...');
+                try {
+                  const users = await pocketbase.collection(usersCollection).getFullList({
+                    filter: `email="${user.email}"`,
+                    limit: 1,
+                  });
+                  if (users.length > 0) {
+                    pbUser = users[0];
+                    console.log('[OAuth SignIn] ✓ Found existing user after creation error:', user.email, 'ID:', pbUser.id);
+                  }
+                } catch (findErr) {
+                  console.error('[OAuth SignIn] Failed to find existing user:', findErr);
+                }
+              }
             }
           }
 

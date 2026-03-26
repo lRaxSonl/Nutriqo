@@ -83,3 +83,5 @@ coverage/
 .cache/
 .eslintcache
 .next/cache/
+
+ai-docs/

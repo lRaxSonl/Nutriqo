@@ -10,6 +10,9 @@ import { Button } from '@/shared/ui/Button/Button';
 import { Select } from '@/shared/ui/Select/Select';
 // Импортируем типы сущности
 import { FoodEntry, MealType } from '@/entities/food/model/types';
+// Импортируем новую вкладку с фото
+import { FoodPhotoTab } from './FoodPhotoTab';
+import { FoodPhotoAnalysisResult } from '@/features/add-food-entry/lib/foodPhotoPrompt';
 
 interface AddFoodFormProps {
   goalId: string;
@@ -19,6 +22,9 @@ interface AddFoodFormProps {
 
 export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
   const { data: session } = useSession();
+  
+  // Состояние для выбора вкладки
+  const [activeTab, setActiveTab] = useState<'manual' | 'photo'>('manual');
   
   // Состояния формы
   const [name, setName] = useState('');
@@ -54,6 +60,17 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
     setProtein(calculatedProtein.toString());
     setFats(calculatedFats.toString());
     setCarbs(calculatedCarbs.toString());
+    setError(null);
+  };
+
+  // Заполняет форму из результата анализа фото
+  const handleFoodAnalyzed = (result: FoodPhotoAnalysisResult) => {
+    setName(result.product_name);
+    setCalories(result.calories.toString());
+    setProtein(result.protein.toString());
+    setFats(result.fat.toString());
+    setCarbs(result.carbohydrates.toString());
+    setActiveTab('manual');
     setError(null);
   };
 
@@ -157,7 +174,33 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
 
   return (
     <Card title="Добавить продукт" className="mb-6">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Вкладки */}
+      <div className="flex gap-2 mb-6 border-b dark:border-gray-700">
+        <button
+          onClick={() => setActiveTab('manual')}
+          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'manual'
+              ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400'
+              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-300'
+          }`}
+        >
+          ✍️ Вручную
+        </button>
+        <button
+          onClick={() => setActiveTab('photo')}
+          className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 ${
+            activeTab === 'photo'
+              ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400'
+              : 'text-gray-600 dark:text-gray-400 border-transparent hover:text-gray-900 dark:hover:text-gray-300'
+          }`}
+        >
+          📷 По фото
+        </button>
+      </div>
+
+      {/* Содержимое вкладки "Вручную" */}
+      {activeTab === 'manual' && (
+        <form onSubmit={handleSubmit} className="space-y-4">
         
         {/* Сообщение об ошибке */}
         {error && (
@@ -275,6 +318,12 @@ export const AddFoodForm = ({ goalId, onAdd, onError }: AddFoodFormProps) => {
           </Button>
         </div>
       </form>
+      )}
+
+      {/* Содержимое вкладки "По фото" */}
+      {activeTab === 'photo' && (
+        <FoodPhotoTab onFoodAnalyzed={handleFoodAnalyzed} />
+      )}
     </Card>
   );
 };

@@ -20,6 +20,8 @@ export async function POST(request: Request) {
 			email,
 			password,
 			passwordConfirm: password,
+			name: email, // Use email as default name
+			subscriptionStatus: 'inactive', // Default subscription status for new users
 		});
 
 		return NextResponse.json({

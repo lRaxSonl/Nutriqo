@@ -47,6 +47,20 @@ export async function getOrCreatePocketBaseToken(userEmail: string, pbUserId?: s
           .collection(usersCollection)
           .getOne(pbUserId);
         console.log('[PBAuthHelper] Found user by ID:', pbUserId);
+        
+        // FALLBACK: If old user doesn't have subscriptionStatus, add it
+        if (!pbUser.subscriptionStatus) {
+          try {
+            console.log('[PBAuthHelper] Updating old user (by ID) with missing subscriptionStatus...');
+            pbUser = await pocketbase.collection(usersCollection).update(pbUserId, {
+              subscriptionStatus: 'inactive',
+            });
+            console.log('[PBAuthHelper] ✓ Updated user subscriptionStatus');
+          } catch (updateErr) {
+            console.warn('[PBAuthHelper] Failed to update subscriptionStatus:', updateErr);
+            // Continue anyway, will try auth with password
+          }
+        }
       } catch (err) {
         console.log('[PBAuthHelper] User not found by ID:', pbUserId, 'error:', err);
         pbUserId = undefined;
@@ -64,6 +78,20 @@ export async function getOrCreatePocketBaseToken(userEmail: string, pbUserId?: s
         if (users.length > 0) {
           pbUser = users[0];
           console.log('[PBAuthHelper] Found user by email:', userEmail, 'ID:', pbUser.id);
+          
+          // FALLBACK: If old user doesn't have subscriptionStatus, add it
+          if (!pbUser.subscriptionStatus) {
+            try {
+              console.log('[PBAuthHelper] Updating old user with missing subscriptionStatus...');
+              pbUser = await pocketbase.collection(usersCollection).update(pbUser.id, {
+                subscriptionStatus: 'inactive',
+              });
+              console.log('[PBAuthHelper] ✓ Updated user subscriptionStatus');
+            } catch (updateErr) {
+              console.warn('[PBAuthHelper] Failed to update subscriptionStatus:', updateErr);
+              // Continue anyway, will try auth with password
+            }
+          }
         }
       } catch (searchErr) {
         console.error('[PBAuthHelper] Error searching user by email:', searchErr);
@@ -77,6 +105,8 @@ export async function getOrCreatePocketBaseToken(userEmail: string, pbUserId?: s
             password: oauthPassword,
             passwordConfirm: oauthPassword,
             name: userEmail,
+            // Provide default subscription status for new OAuth users
+            subscriptionStatus: 'inactive', // inactive | trial | active
           });
           console.log('[PBAuthHelper] ✓ User created successfully:', userEmail, 'ID:', pbUser.id);
         } catch (createErr) {
@@ -94,8 +124,24 @@ export async function getOrCreatePocketBaseToken(userEmail: string, pbUserId?: s
             pocketbaseData: errorData,
           });
           
-          // Не возвращаем null - может быть пользователь уже существует
-          // Попробуем его найти по email и использовать его пароль
+          // If email validation_not_unique error, user already exists - try to find
+          if (errorData.email?.code === 'validation_not_unique' || errorMsg.includes('unique')) {
+            console.log('[PBAuthHelper] Email already exists, trying to find existing user...');
+            try {
+              const existingUsers = await pocketbase.collection(usersCollection).getFullList({
+                filter: `email="${userEmail}"`,
+                limit: 1,
+              });
+              if (existingUsers.length > 0) {
+                pbUser = existingUsers[0];
+                console.log('[PBAuthHelper] ✓ Found existing user after create error:', userEmail, 'ID:', pbUser.id);
+              } else {
+                console.warn('[PBAuthHelper] Strange: email validation_not_unique but user not found!');
+              }
+            } catch (findErr) {
+              console.error('[PBAuthHelper] Failed to find existing user:', findErr);
+            }
+          }
         }
       }
     }
