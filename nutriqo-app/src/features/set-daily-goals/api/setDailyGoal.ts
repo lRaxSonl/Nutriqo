@@ -41,24 +41,39 @@ export async function setDailyGoal(
 
     // Note: User validation skipped - NextAuth already authenticated the user
 
+    // Автоматический расчет БЖУ если они не переданы
+    let proteinGoal = input.protein_goal ?? 0;
+    let fatsGoal = input.fats_goal ?? 0;
+    let carbsGoal = input.carbs_goal ?? 0;
+
+    // Если БЖУ не были явно переданы (все 0 или undefined), рассчитываем автоматически
+    if (!input.protein_goal && !input.fats_goal && !input.carbs_goal) {
+      // Стандартное соотношение: Б 20%, Ж 30%, У 50%
+      proteinGoal = Math.round((input.calories_goal * 0.2) / 4);
+      fatsGoal = Math.round((input.calories_goal * 0.3) / 9);
+      carbsGoal = Math.round((input.calories_goal * 0.5) / 4);
+    }
+
     // Prepare data for saving (no date field - goals are per-user singletons)
     const goalData: Omit<GoalType, 'id' | 'created_at' | 'updated_at'> = {
       user_id: input.user_id,
       calories_goal: input.calories_goal,
-      protein_goal: input.protein_goal ?? 0,
-      fats_goal: input.fats_goal ?? 0,
-      carbs_goal: input.carbs_goal ?? 0,
+      protein_goal: proteinGoal,
+      fats_goal: fatsGoal,
+      carbs_goal: carbsGoal,
+      is_finished: false,
     };
 
-    // Upsert: Update existing goal if present, otherwise create new
-    const existingGoal = await goalModel.getGoalByDate(input.user_id);
-    const savedGoal = existingGoal
-      ? await goalModel.update(existingGoal.id, {
+    // Upsert: Update existing ACTIVE goal if present, otherwise create new
+    // Important: Only update if the existing goal is not finished (is_finished != true)
+    const existingActiveGoal = await goalModel.getActiveGoal(input.user_id);
+    const savedGoal = existingActiveGoal
+      ? await goalModel.update(existingActiveGoal.id, {
           calories_goal: goalData.calories_goal,
           protein_goal: goalData.protein_goal,
           fats_goal: goalData.fats_goal,
           carbs_goal: goalData.carbs_goal,
-        })
+        } as any)
       : await goalModel.create(goalData);
 
     return savedGoal;

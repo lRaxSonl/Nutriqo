@@ -49,6 +49,7 @@ interface GoalType extends BaseEntity {
   protein_goal?: number;
   fats_goal?: number;
   carbs_goal?: number;
+  is_finished: boolean
   // Note: 'date' field not used. Goals are singletons per user, tracked via created_at/updated_at
 }
 ```

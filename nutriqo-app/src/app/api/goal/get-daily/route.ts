@@ -27,14 +27,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем цель (самую свежую) пользователя
+    // Получаем активную (не завершённую) цель пользователя
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
 
     let goal;
     try {
-      goal = await authenticatedGoalModel.getGoalByDate(session.user.id, '');
+      goal = await authenticatedGoalModel.getActiveGoal(session.user.id);
     } catch (fetchError) {
-      console.error('Error fetching goal by date:', fetchError);
+      console.error('Error fetching active goal:', fetchError);
       throw fetchError;
     }
 

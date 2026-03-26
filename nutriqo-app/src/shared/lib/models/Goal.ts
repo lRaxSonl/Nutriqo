@@ -8,6 +8,7 @@ export interface GoalType extends BaseEntity {
   protein_goal?: number;
   fats_goal?: number;
   carbs_goal?: number;
+  is_finished: boolean; // field to mark goal as finished
   // NOTE: 'date' field is not used. Daily goals are stored once and updated via created_at/updated_at.
   // For querying today's goal, use getGoalByDate() which returns the most recent goal for the user.
 }
@@ -15,6 +16,39 @@ export interface GoalType extends BaseEntity {
 class Goal extends BaseModel<GoalType> {
   constructor(collectionName: string = 'goals', client?: typeof pb) {
     super(collectionName, client);
+  }
+
+  /**
+   * Получить активную (не завершённую) цель пользователя
+   * Возвращает только цели где is_finished != true
+   */
+  async getActiveGoal(userId: string): Promise<GoalType | null> {
+    try {
+      const activeGoals = await this.client.collection(this.collection).getFullList({
+        filter: `user_id = "${userId}" && is_finished != true`,
+        sort: '-updated_at',
+        limit: 1
+      });
+      
+      return activeGoals.length > 0 ? (activeGoals[0] as unknown as GoalType) : null;
+    } catch (error) {
+      logger.error(`Failed to fetch active goal for user`, 'DB_GET_ACTIVE_GOAL_ERROR', { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Получить все активные (не завершённые) цели пользователя
+   */
+  async getUnfinishedGoals(userId: string): Promise<GoalType[]> {
+    try {
+      return await this.client.collection(this.collection).getFullList({
+        filter: `user_id="${userId}" && is_finished!=true`
+      });
+    } catch (error) {
+      logger.error(`Failed to fetch unfinished goals for user`, 'DB_GET_UNFINISHED_GOALS_ERROR', { userId });
+      throw new Error(`Failed to fetch unfinished goals for user`);
+    }
   }
 
   /**

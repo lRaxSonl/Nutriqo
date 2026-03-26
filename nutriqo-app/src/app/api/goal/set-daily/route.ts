@@ -78,6 +78,20 @@ export async function POST(request: NextRequest) {
     // Create authenticated Goal model instance with user's PocketBase token
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken);
 
+    // Проверяем есть ли активные (не завершённые) цели
+    const unfinishedGoals = await authenticatedGoalModel.getUnfinishedGoals(session.user.id);
+    
+    if (unfinishedGoals.length > 0) {
+      // Есть незавршённые цели - нельзя создать новую
+      return NextResponse.json(
+        { 
+          error: 'У вас есть незавершённая цель за предыдущий день. Завершите её перед созданием новой.',
+          hasUnfinishedGoal: true,
+        },
+        { status: 409 }
+      );
+    }
+
     // Call API function to save goal (upsert if goal already exists for user)
     const goal = await setDailyGoal(
       {

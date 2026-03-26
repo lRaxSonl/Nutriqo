@@ -7,6 +7,7 @@ import { Card } from '@/shared/ui/Card/Card';
 import { Input } from '@/shared/ui/Input/Input';
 import { Button } from '@/shared/ui/Button/Button';
 import { DailyGoal } from '@/entities/food/model/types';
+import { CompleteDayButton } from '@/features/complete-day/ui/CompleteDayButton';
 import { extractErrorMessage, extractGoalId, extractResponseError } from '../api/errorHandling';
 
 interface GoalSetterProps {
@@ -56,7 +57,7 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
   if (!isEditing && initialGoal) {
     return (
       <Card className="mb-6 bg-background border-border">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
           <div>
             <span className="text-sm text-primary font-medium">Ваша цель на сегодня</span>
             <div className="text-2xl font-bold text-foreground">{initialGoal.calories} ккал</div>
@@ -66,9 +67,12 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
               </div>
             )}
           </div>
-          <Button variant="secondary" onClick={() => setIsEditing(true)}>
-            Изменить
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="secondary" onClick={() => setIsEditing(true)}>
+              ✏️ Изменить
+            </Button>
+            <CompleteDayButton />
+          </div>
         </div>
       </Card>
     );
@@ -129,17 +133,21 @@ export const GoalSetter = ({ onSave, onDelete, initialGoal }: GoalSetterProps) =
         if (response.status === 403 && errorMessage?.includes('PocketBase permissions error')) {
           throw new Error('PocketBase запрещает создание goals для обычного пользователя. Исправь Create rule в коллекции goals.');
         }
+        if (response.status === 409) {
+          throw new Error(errorMessage || 'У вас есть незавершённая цель. Завершите её перед созданием новой.');
+        }
         throw new Error(errorMessage || 'Ошибка при сохранении цели');
       }
 
       const goalId = extractGoalId(response.data);
-
-      // Преобразуем ответ в формат DailyGoal для UI
+      
+      // Используем ответ от API для БЖУ (они могут быть рассчитаны на сервере)
+      const responseData = response.data as any;
       const goal: DailyGoal = {
-        calories: calValue,
-        protein: proteinValue,
-        fats: fatsValue,
-        carbs: carbsValue,
+        calories: responseData.calories_goal || calValue,
+        protein: responseData.protein_goal || proteinValue,
+        fats: responseData.fats_goal || fatsValue,
+        carbs: responseData.carbs_goal || carbsValue,
       };
 
       onSave(goal, goalId);
