@@ -29,6 +29,10 @@
 
 **Nutriqo** on kaasaegne toitumise jälgimise rakendus, mis kasutab AI-d toidufotode analüüsimiseks ja kasutajate abistamiseks tasakaalustatud dieedi säilitamisel. Rakendus pakub reaalajas toiduanalüüsi (valgud, rasvad, süsivesikud), eesmärkide jälgimist ja preemiumfunktsioonid Stripe integratsiooniga.
 
+<img width="1919" height="882" alt="1" src="https://github.com/user-attachments/assets/218e96c8-8194-4c7b-8b5f-b1a62d94c31d" />
+
+<img width="1473" height="841" alt="Снимок экрана_20260326_204411" src="https://github.com/user-attachments/assets/2166f68e-3206-4b0f-b5e8-a3842b4613dd" />
+
 ### Peamised omadused
 
 - 🤖 **AI-iga toidu fotode analüüs**: Kasutab OpenAI GPT-4 Vision tasandi toidufotode analüüsimiseks ja toiduväärtuse andmete väljavõtmiseks
