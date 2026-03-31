@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { addFoodEntry } from '@/features/add-food-entry/api/addFoodEntry';
 import { EatenFood } from '@/shared/lib/models/EatenFood';
 import { Goal } from '@/shared/lib/models/Goal';
@@ -11,21 +10,24 @@ const VALID_MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 /**
  * POST /api/food/add-entry
  * Добавить запись о съеденной пище
+ * SECURITY: Требует верифицированный JWT
  */
 export async function POST(request: NextRequest) {
   try {
-    // Получаем сессию пользователя
-    const session = await getServerSession(authOptions);
+    // SECURITY: Verify JWT signature and get full session
+    const verifiedSession = await getVerifiedSession();
     
-    if (!session?.user?.id) {
+    if (!verifiedSession?.user?.id) {
+      logger.warn('Unauthorized food entry attempt - invalid JWT or missing session');
       return NextResponse.json(
         { error: 'Unauthorized - Please log in' },
         { status: 401 }
       );
     }
 
-    const pbToken = session.pbToken;
+    const pbToken = verifiedSession.pbToken;
     if (!pbToken) {
+      logger.error('Session verified but pbToken missing', 'PBTOKEN_MISSING');
       return NextResponse.json(
         { error: 'Session expired. Please sign in again.' },
         { status: 401 }

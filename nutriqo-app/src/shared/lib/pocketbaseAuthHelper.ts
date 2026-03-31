@@ -1,29 +1,15 @@
 import { createPocketBaseClient, getPocketBaseUsersCollection } from './pocketbase';
 import { logger } from './logger';
+import { generateSecureOAuthPassword, hashForLogging } from './securityUtils';
 
 /**
- * Simple hash function for generating deterministic passwords
- * Based on email to ensure same password is generated each time
- */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32bit integer
-  }
-  return Math.abs(hash).toString(36);
-}
-
-/**
- * Generate a deterministic password for OAuth users based on email
- * This ensures we can recreate the same password if auth fails
+ * Generate a cryptographically secure password for OAuth users
+ * Uses crypto.randomBytes instead of deterministic hash (not guessable)
+ * @deprecated Use generateSecureOAuthPassword from securityUtils.ts
  */
 export function generateOAuthPassword(email: string): string {
-  const hash1 = simpleHash(`oauth_${email}`);
-  const hash2 = simpleHash(`pb_${email}`);
-  // Combine hashes and take first 20 chars to ensure good entropy
-  return `pb_${(hash1 + hash2).substring(0, 20).toLowerCase()}`;
+  // For backward compatibility, but uses secure generation
+  return generateSecureOAuthPassword(email);
 }
 
 /**

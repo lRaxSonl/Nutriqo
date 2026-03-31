@@ -2,14 +2,14 @@
  * POST /api/payment/activate-subscription
  * 
  * Активирует подписку пользователя после успешного платежа в Stripe
- * Требуется: NextAuth сессия
+ * SECURITY: Требует верифицированный JWT
  * 
  * Semi-hack approach: Обновляем subscriptionStatus в JWT и сессии
  * Постоянная активация будет через Stripe webhook (в будущем)
  */
 
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
+import { NextResponse } from 'next/server';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { logger } from '@/shared/lib/logger';
 import PocketBase from 'pocketbase';
 
@@ -17,22 +17,23 @@ const POCKETBASE_URL = process.env.POCKETBASE_URL;
 
 export async function POST(request: Request) {
   try {
-    // Проверяем авторизацию
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      logger.warn('Activate subscription: unauthorized');
-      return Response.json(
+    // SECURITY: Verify JWT signature and get full session
+    const verifiedSession = await getVerifiedSession();
+    
+    if (!verifiedSession?.user?.id) {
+      logger.warn('Activate subscription: unauthorized', 'UNAUTHORIZED');
+      return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    const userId = session.user.id;
-    const pbToken = session.pbToken;
+    const userId = verifiedSession.user.id;
+    const pbToken = verifiedSession.pbToken;
 
     if (!pbToken) {
-      logger.warn(`Activate subscription: no pbToken for user ${userId}`);
-      return Response.json(
+      logger.warn(`Activate subscription: no pbToken for user`, 'PBTOKEN_MISSING');
+      return NextResponse.json(
         { success: false, error: 'Missing authentication token' },
         { status: 401 }
       );
@@ -49,10 +50,10 @@ export async function POST(request: Request) {
         subscriptionStatus: 'active',
       });
 
-      logger.info(`✓ Subscription activated: ${userId}`);
+      logger.info(`Subscription activated: ${userId}`);
 
       // Вернули с subscriptionStatus чтобы эту информацию можно было использовать для обновления сессии
-      return Response.json(
+      return NextResponse.json(
         {
           success: true,
           data: {
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       );
     } catch (pbError: any) {
       const errorMsg = pbError?.message || 'PocketBase error';
-      logger.error('PocketBase update error', 'PB_ERROR', { error: errorMsg });
+      logger.error('PocketBase update error', 'PB_UPDATE_ERROR');
 
       // Даже если не получилось обновить в БД, вернём успех
       // Потому что сессия уже будет обновлена

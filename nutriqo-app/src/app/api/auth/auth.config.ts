@@ -55,7 +55,7 @@ export const authOptions: NextAuthOptions = {
             .collection(usersCollection)
             .authWithPassword(credentials.email, credentials.password);
 
-          console.log('[Credentials SignIn] ✓ User authenticated:', credentials.email, 'pbUserId:', authData.record.id);
+          logger.info('User authenticated via credentials provider');
 
           return {
             id: authData.record.id,
@@ -67,7 +67,7 @@ export const authOptions: NextAuthOptions = {
             pbToken: authData.token, // Сохраняем PocketBase token
           };
         } catch (error) {
-          console.error('[Credentials SignIn] ✗ Authentication failed:', credentials.email);
+          logger.error('Credentials authentication failed', 'AUTH_CREDENTIALS_ERROR');
           return null;
         }
       },
@@ -81,15 +81,11 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async signIn({ user, account, profile }) {
-      console.log('\n========== [SignIn Callback] ==========');
-      console.log('[SignIn Callback] STARTED - This should always log');
-      console.log('[SignIn Callback]   - account?.type:', account?.type);
-      console.log('[SignIn Callback]   - user.email:', user.email);
-      console.log('[SignIn Callback]   - user.id:', user.id);
+      try {
       
       // Обработка OAuth авторизации (Google и т.д.)
       if (account && user.email) {
-        console.log('[OAuth SignIn] Processing OAuth user:', user.email);
+        logger.info('Processing OAuth login');
         try {
           const pocketbase = createPocketBaseClient();
           const usersCollection = getPocketBaseUsersCollection();
@@ -98,26 +94,18 @@ export const authOptions: NextAuthOptions = {
           // Ищем пользователя в PocketBase
           let pbUser;
           try {
-            console.log('[OAuth SignIn] Searching PB for email:', user.email);
             const users = await pocketbase.collection(usersCollection).getFullList({
               filter: `email="${user.email}"`,
               limit: 1,
             });
             pbUser = users[0];
-            if (pbUser) {
-              console.log('[OAuth SignIn] ✓ Found existing PB user:', user.email, 'id:', pbUser.id);
-            } else {
-              console.log('[OAuth SignIn] User not found in PB, will create');
-            }
           } catch (findError) {
-            console.log('[OAuth SignIn] Search error (expected if not found), will create:', findError);
             pbUser = null;
           }
 
           // Если не найден, создаём нового
           if (!pbUser) {
             try {
-              console.log('[OAuth SignIn] Creating new PB user for:', user.email);
               pbUser = await pocketbase.collection(usersCollection).create({
                 email: user.email,
                 password: oauthPassword,
@@ -126,15 +114,13 @@ export const authOptions: NextAuthOptions = {
                 role: 'user', // Default role for new users
                 subscriptionStatus: 'inactive', // Add required field for new users
               });
-              console.log('[OAuth SignIn] ✓ User created with id:', pbUser.id);
-              logger.info('OAuth user created: ' + user.email);
+              logger.info('OAuth user created');
             } catch (createErr) {
-              console.error('[OAuth SignIn] ✗ Failed to create user:', createErr);
+              logger.error('Failed to create OAuth user', 'OAUTH_USER_CREATE_ERROR');
               
               // If creation failed (e.g., email already exists), try to find existing user
               const errorMsg = (createErr as any)?.message || '';
               if (errorMsg.includes('validation_not_unique') || errorMsg.includes('unique')) {
-                console.log('[OAuth SignIn] Email already exists, searching for existing...');
                 try {
                   const users = await pocketbase.collection(usersCollection).getFullList({
                     filter: `email="${user.email}"`,
@@ -142,10 +128,9 @@ export const authOptions: NextAuthOptions = {
                   });
                   if (users.length > 0) {
                     pbUser = users[0];
-                    console.log('[OAuth SignIn] ✓ Found existing user:', pbUser.id);
                   }
                 } catch (findErr) {
-                  console.error('[OAuth SignIn] Failed to find existing user:', findErr);
+                  logger.error('Error finding existing user after creation failure', 'OAUTH_USER_FIND_ERROR');
                 }
               }
             }
@@ -157,45 +142,28 @@ export const authOptions: NextAuthOptions = {
             (user as any).pbUserEmail = pbUser.email;
             (user as any).subscriptionStatus = pbUser.subscriptionStatus || 'inactive';
             (user as any).role = pbUser.role || 'user'; // Сохраняем роль из PB
-            console.log('[OAuth SignIn] ✓ Stored in user object:');
-            console.log('[OAuth SignIn]   - pbUserId:', (user as any).pbUserId);
-            console.log('[OAuth SignIn]   - subscriptionStatus:', (user as any).subscriptionStatus);
-            console.log('[OAuth SignIn]   - role:', (user as any).role);
           } else {
-            console.warn('[OAuth SignIn] ✗ pbUser?.id missing - cannot store pbUserId');
+            logger.warn('pbUser?.id missing during OAuth signup');
           }
         } catch (error) {
-          console.error('[OAuth SignIn] Unexpected error:', error);
+          logger.error('Unexpected error during OAuth login', 'OAUTH_UNEXPECTED_ERROR');
           // Continue anyway to not block the login
         }
-      } else if (!account) {
-        console.log('[SignIn] Not OAuth (account is null) - likely Credentials provider');
-      } else if (!user.email) {
-        console.log('[SignIn] No user.email');
       }
 
-      console.log('[SignIn Callback] ✓ Returning true');
-      console.log('[SignIn Callback]   - user.pbUserId after:', (user as any).pbUserId);
-      console.log('========== [SignIn Callback END] ==========\n');
       return true;
+    } catch (error) {
+      logger.error('SignIn callback error', 'SIGNIN_CALLBACK_ERROR');
+      return false;
+    }
     },
 
     async jwt({ token, user, account }) {
       try {
-        console.log('\n========== [JWT Callback START] ==========');
-        console.log('[JWT Callback] Params received:');
-        console.log('[JWT Callback]   - user:', user ? 'EXISTS' : 'NULL');
-        console.log('[JWT Callback]   - account:', account ? 'EXISTS' : 'NULL');
-        console.log('[JWT Callback]   - token.email:', token.email);
-        console.log('[JWT Callback]   - token.pbUserId:', token.pbUserId);
+
         
         // При первом логине - копируем ID и данные из user объекта
         if (user) {
-          console.log('[JWT Callback] ✓ User object received (first login or signIn callback)');
-          console.log('[JWT Callback]   - user.id:', user.id);
-          console.log('[JWT Callback]   - user.email:', user.email);
-          console.log('[JWT Callback]   - user.pbUserId:', (user as any).pbUserId);
-          console.log('[JWT Callback]   - user.subscriptionStatus:', (user as any).subscriptionStatus);
           
           token.id = user.id;
           token.pbUserId = (user as any).pbUserId;
@@ -430,21 +398,16 @@ export const authOptions: NextAuthOptions = {
           session.user.pbUserId = token.pbUserId as string;
           session.user.role = token.role as 'user' | 'admin';
           session.user.subscriptionStatus = token.subscriptionStatus as 'active' | 'inactive';
-          
-          console.log('[Session Callback] ✓ Session updated from JWT token');
-          console.log('[Session Callback]   - pbUserId:', session.user?.pbUserId);
-          console.log('[Session Callback]   - role:', session.user?.role);
-          console.log('[Session Callback]   - subscriptionStatus:', session.user?.subscriptionStatus);
         }
         // Копируем pbToken из token в session для использования в API routes
         if (token.pbToken) {
           session.pbToken = token.pbToken as string;
         } else {
-          console.warn('[Session Callback] WARNING: No pbToken in JWT token!');
+          logger.warn('No pbToken in JWT token');
         }
         return session;
       } catch (error) {
-        console.error('[Session Callback] Error:', error);
+        logger.error('Session callback error', 'SESSION_CALLBACK_ERROR');
         return session;
       }
     },

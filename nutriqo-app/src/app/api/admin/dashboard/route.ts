@@ -2,20 +2,27 @@
  * GET /api/admin/dashboard
  * 
  * Получить статистику для админ дашборда
- * Требует: NextAuth сессия с role='admin'
+ * SECURITY: Требует верифицированный JWT с role='admin'
  */
 
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
-import { requireAdmin } from '@/features/admin';
+import { getVerifiedAdminSession } from '@/shared/lib/verifyJWT';
 import { getAdminPocketBaseClient, getPocketBaseUsersCollection } from '@/shared/lib/pocketbase';
+import { logger } from '@/shared/lib/logger';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    requireAdmin(session);
+    // SECURITY: Verify JWT signature and admin role
+    const adminSession = await getVerifiedAdminSession();
+    
+    if (!adminSession?.verifiedToken) {
+      logger.warn('Unauthorized admin dashboard access - invalid JWT or missing admin role');
+      return Response.json(
+        { success: false, error: 'Admin access required' },
+        { status: 403 }
+      );
+    }
 
-    console.log('[Admin Dashboard API] Fetching stats...');
+    logger.info(`Admin ${adminSession.verifiedToken.sub} accessing dashboard`);
 
     const pocketbase = await getAdminPocketBaseClient();
     const usersCollection = getPocketBaseUsersCollection();

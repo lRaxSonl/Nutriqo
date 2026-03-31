@@ -2,26 +2,32 @@
  * GET /api/admin/users
  * 
  * Получить список всех пользователей
- * Требует: NextAuth сессия с role='admin'
+ * SECURITY: Требует верифицированный JWT с role='admin'
  */
 
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
-import { requireAdmin } from '@/features/admin';
+import { NextResponse } from 'next/server';
+import { getVerifiedAdminToken } from '@/shared/lib/verifyJWT';
 import { getAdminPocketBaseClient, getPocketBaseUsersCollection } from '@/shared/lib/pocketbase';
+import { logger } from '@/shared/lib/logger';
 
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    requireAdmin(session);
+    // SECURITY: Verify JWT signature and admin role
+    const adminToken = await getVerifiedAdminToken();
+    
+    if (!adminToken) {
+      logger.warn('Unauthorized admin access attempt - invalid JWT or missing admin role');
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin access required' },
+        { status: 403 }
+      );
+    }
 
-    console.log('[Admin Users API] Fetching users with admin access...');
+    logger.info(`Admin ${adminToken.sub} fetching users list`);
     
     // Use admin client for full access to all users
     const pocketbase = await getAdminPocketBaseClient();
     const usersCollection = getPocketBaseUsersCollection();
-
-    console.log(`[Admin Users API] Fetching from collection: ${usersCollection}`);
 
     // Get all users - now with admin privileges
     const users = await pocketbase.collection(usersCollection).getFullList({
@@ -29,15 +35,7 @@ export async function GET() {
       sort: '-created',
     });
 
-    console.log(`[Admin Users API] ✓ Fetched ${users.length} users`);
-    
-    if (users.length === 0) {
-      console.warn('[Admin Users API] ⚠️ Got 0 users from database');
-      console.warn('[Admin Users API] This may mean:');
-      console.warn('[Admin Users API]   1. No users created yet');
-      console.warn('[Admin Users API]   2. Collection rules restrict access');
-      console.warn('[Admin Users API]   3. Admin authentication failed (check POCKETBASE_ADMIN_EMAIL/PASSWORD)');
-    }
+    logger.info(`Fetched ${users.length} users`);
 
     return Response.json({
       success: true,

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { Goal } from '@/shared/lib/models/Goal';
 import { logger } from '@/shared/lib/logger';
-import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
 
 /**
  * PATCH /api/goal/update-daily
@@ -12,16 +10,28 @@ import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
  * Отличие от POST /api/goal/set-daily:
  * - set-daily: проверяет наличие незавершённых целей, создаёт новую если нет
  * - update-daily: просто обновляет существующую активную цель
+ * SECURITY: Требует верифицированный JWT
  */
 export async function PATCH(request: NextRequest) {
   try {
-    // Получаем сессию пользователя
-    const session = await getServerSession(authOptions);
+    // SECURITY: Verify JWT signature and get full session
+    const verifiedSession = await getVerifiedSession();
     
-    // Обеспечиваем наличие pbToken
-    const { pbToken, errorResponse } = await ensurePBToken(session);
-    if (errorResponse) {
-      return errorResponse;
+    if (!verifiedSession?.user?.id) {
+      logger.warn('Unauthorized update-daily goal attempt - invalid JWT');
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in' },
+        { status: 401 }
+      );
+    }
+
+    const pbToken = verifiedSession.pbToken;
+    if (!pbToken) {
+      logger.error('Session verified but pbToken missing', 'PBTOKEN_MISSING');
+      return NextResponse.json(
+        { error: 'Session expired. Please sign in again.' },
+        { status: 401 }
+      );
     }
 
     // Get request body
@@ -74,7 +84,7 @@ export async function PATCH(request: NextRequest) {
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken!);
 
     // Получаем активную цель пользователя
-    const activeGoal = await authenticatedGoalModel.getActiveGoal(session!.user.id);
+    const activeGoal = await authenticatedGoalModel.getActiveGoal(verifiedSession.user.id);
     
     if (!activeGoal) {
       // Нет активной цели - нельзя обновить
@@ -99,7 +109,7 @@ export async function PATCH(request: NextRequest) {
 
     logger.error(`Goal updated successfully`, 'GOAL_UPDATE_SUCCESS', { 
       goalId: activeGoal.id,
-      userId: session!.user.id,
+      userId: verifiedSession.user.id,
     });
 
     return NextResponse.json(updatedGoal, { status: 200 });

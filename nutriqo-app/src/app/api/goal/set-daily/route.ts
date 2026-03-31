@@ -1,24 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { setDailyGoal } from '@/features/set-daily-goals/api/setDailyGoal';
 import { Goal } from '@/shared/lib/models/Goal';
 import { logger } from '@/shared/lib/logger';
-import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
 
 /**
  * POST /api/goal/set-daily
  * Установить ежедневную цель
+ * SECURITY: Требует верифицированный JWT
  */
 export async function POST(request: NextRequest) {
   try {
-    // Получаем сессию пользователя
-    const session = await getServerSession(authOptions);
+    // SECURITY: Verify JWT signature and get full session
+    const verifiedSession = await getVerifiedSession();
     
-    // Обеспечиваем наличие pbToken
-    const { pbToken, errorResponse } = await ensurePBToken(session);
-    if (errorResponse) {
-      return errorResponse;
+    if (!verifiedSession?.user?.id) {
+      logger.warn('Unauthorized set-daily goal attempt - invalid JWT');
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in' },
+        { status: 401 }
+      );
+    }
+
+    const pbToken = verifiedSession.pbToken;
+    if (!pbToken) {
+      logger.error('Session verified but pbToken missing', 'PBTOKEN_MISSING');
+      return NextResponse.json(
+        { error: 'Session expired. Please sign in again.' },
+        { status: 401 }
+      );
     }
 
     // Get request body
@@ -71,7 +81,7 @@ export async function POST(request: NextRequest) {
     const authenticatedGoalModel = new Goal().withAuthToken(pbToken!);
 
     // Проверяем есть ли активные (не завершённые) цели
-    const unfinishedGoals = await authenticatedGoalModel.getUnfinishedGoals(session!.user.id);
+    const unfinishedGoals = await authenticatedGoalModel.getUnfinishedGoals(verifiedSession.user.id);
     
     if (unfinishedGoals.length > 0) {
       // Есть незавршённые цели - нельзя создать новую
@@ -87,7 +97,7 @@ export async function POST(request: NextRequest) {
     // Call API function to save goal (upsert if goal already exists for user)
     const goal = await setDailyGoal(
       {
-        user_id: session!.user.id,
+        user_id: verifiedSession.user.id,
         calories_goal: caloriesGoal,
         protein_goal: protein_goal ? Number(protein_goal) : undefined,
         fats_goal: fats_goal ? Number(fats_goal) : undefined,

@@ -8,9 +8,8 @@
  * Returns: { success: boolean, data?: FoodPhotoAnalysisResult, error?: string }
  */
 
-import { getServerSession } from 'next-auth/next';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { FOOD_PHOTO_ANALYSIS_PROMPT, FoodPhotoAnalysisResult } from '@/features/add-food-entry/lib/foodPhotoPrompt';
-import { authOptions } from '@/app/api/auth/auth.config';
 import { logger } from '@/shared/lib/logger';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -153,10 +152,10 @@ async function analyzeWithOpenAI(base64Image: string): Promise<FoodPhotoAnalysis
 
 export async function POST(request: Request) {
   try {
-    // Проверяем авторизацию
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      logger.warn('Unauthorized access attempt');
+    // SECURITY: Verify JWT signature
+    const verifiedSession = await getVerifiedSession();
+    if (!verifiedSession?.user) {
+      logger.warn('Unauthorized photo analysis attempt - invalid JWT');
       return Response.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -164,8 +163,8 @@ export async function POST(request: Request) {
     }
 
     // Проверяем подписку - функция photo analysis требует Premium
-    if (session.user.subscriptionStatus !== 'active') {
-      logger.warn(`Photo analysis requested by non-premium user: ${session.user.email}`);
+    if (verifiedSession.user.subscriptionStatus !== 'active') {
+      logger.warn(`Photo analysis requested by non-premium user: ${verifiedSession.user.email}`);
       return Response.json(
         {
           success: false,

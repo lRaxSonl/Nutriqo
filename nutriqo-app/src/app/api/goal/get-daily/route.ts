@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/auth.config';
+import { getVerifiedSession } from '@/shared/lib/verifyJWT';
 import { Goal } from '@/shared/lib/models/Goal';
-import { ensurePBToken } from '@/app/api/helpers/ensurePBToken';
+import { logger } from '@/shared/lib/logger';
 
 /**
  * GET /api/goal/get-daily
  * Получить цель за сегодня для текущего пользователя
+ * SECURITY: Требует верифицированный JWT
  */
 export async function GET(request: NextRequest) {
   try {
-    // Получаем сессию пользователя
-    const session = await getServerSession(authOptions);
+    // SECURITY: Verify JWT signature and get full session
+    const verifiedSession = await getVerifiedSession();
     
-    // Обеспечиваем наличие pbToken
-    const { pbToken, errorResponse } = await ensurePBToken(session);
-    if (errorResponse) {
-      return errorResponse;
+    if (!verifiedSession?.user?.id) {
+      logger.warn('Unauthorized get-daily goal attempt - invalid JWT');
+      return NextResponse.json(
+        { error: 'Unauthorized - Please log in' },
+        { status: 401 }
+      );
+    }
+
+    const pbToken = verifiedSession.pbToken;
+    if (!pbToken) {
+      logger.error('Session verified but pbToken missing', 'PBTOKEN_MISSING');
+      return NextResponse.json(
+        { error: 'Session expired. Please sign in again.' },
+        { status: 401 }
+      );
     }
 
     // Получаем активную (не завершённую) цель пользователя
@@ -24,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     let goal;
     try {
-      goal = await authenticatedGoalModel.getActiveGoal(session!.user.id);
+      goal = await authenticatedGoalModel.getActiveGoal(verifiedSession.user.id);
     } catch (fetchError) {
       console.error('[GET /api/goal/get-daily] Error fetching active goal:', fetchError);
       throw fetchError;
