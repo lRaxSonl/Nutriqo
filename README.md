@@ -10,21 +10,6 @@
 
 > **⚠️ Note:** This project was primarily written using AI (Claude) in collaboration with a human developer. The codebase demonstrates modern full-stack development practices with AI assistance.
 
-## 📋 Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Configuration](#configuration)
-- [API Documentation](#api-documentation)
-- [Architecture](#architecture)
-- [Development](#development)
-- [Deployment](#deployment)
-- [Contributing](#contributing)
-- [License](#license)
-
 ## 🎯 Overview
 
 **Nutriqo** is a modern nutrition tracking application that uses AI to analyze food photos and help users maintain a balanced diet. The app provides real-time nutritional analysis (proteins, fats, carbohydrates), goal tracking, and premium subscription features with Stripe integration.
@@ -42,7 +27,6 @@
 - 💳 **Premium Subscriptions**: Stripe integration for $4.99/month premium features
 - 🔐 **Secure Authentication**: OAuth (Google) + Email/Password with NextAuth.js
 - 👮 **Admin Dashboard**: Role-based access control with user management
-- 🌗 **Dark/Light Theme**: Theme switching with persistent user preferences
 - 📱 **Responsive Design**: Mobile-first approach with TailwindCSS
 - ⚡ **High Performance**: Next.js 16 with Turbopack for lightning-fast builds
 
@@ -91,10 +75,10 @@
 - **HTTP Client**: Custom axios-based wrapper
 
 ### DevOps & Tools
-- **Package Manager**: npm/pnpm
+- **Package Manager**: npm
 - **Testing**: Jest 30.3.0
 - **Linting**: ESLint 9
-- **Type Checking**: TypeScript & Pylance
+- **Type Checking**: TypeScript
 - **Environment**: .env.local for secrets
 
 ## 📁 Project Structure
@@ -160,7 +144,7 @@ This project follows the **Feature-Sliced Design** architecture:
 ### Prerequisites
 
 - Node.js >= 18.17
-- npm or pnpm
+- npm
 - A PocketBase instance (local or hosted)
 - OpenAI API key (for photo analysis)
 - Google OAuth credentials
